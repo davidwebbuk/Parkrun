@@ -59,16 +59,22 @@ API) and swap it in behind the same `estimateJourney()` interface used by
 
 This was built in a sandboxed environment with **no outbound access** to
 `parkrun.com`, `nationalrail.co.uk`, or `naptan.api.dft.gov.uk` — so the
-exact JSON/CSV field names below are informed by general knowledge, not a
-live test run, and the code is written defensively (multiple candidate field
-names, clear errors, and a bundled fallback dataset) so it fails safely if a
-name has changed:
+code is written defensively (multiple candidate field names, clear errors,
+and a bundled fallback dataset) so it fails safely if a name has changed.
 
-- `events.json`: assumed shape `{ events: { features: [...] }, countries: {...} }`,
-  each feature's `properties` holding an `eventname` slug and `countrycode`.
-  See `server/lib/parkrunSource.js`.
+- `events.json` shape — **cross-checked against
+  [andydavidson/parkrun-mcp](https://github.com/andydavidson/parkrun-mcp)**,
+  an existing open-source project that parses the same feed, and confirmed
+  correct: `{ events: { features: [...] }, countries: {...} }`, each
+  feature's `properties.eventname` (slug), `properties.countrycode`, and
+  `geometry.coordinates` as `[lon, lat]`. That project also filters on
+  `properties.seriesid === 1` to get standard Saturday 5k events (excluding
+  junior parkrun's 2k/Sunday events, which run on a different schedule) —
+  `parkrunSource.js` now applies the same filter. See
+  `server/lib/parkrunSource.js`.
 - NaPTAN CSV: assumed columns `CommonName`, `Latitude`, `Longitude`,
-  `ATCOCode`. See `server/lib/stationSource.js`.
+  `ATCOCode` — **not** cross-checked against another source, still unverified.
+  See `server/lib/stationSource.js`.
 
 **Before relying on this**, run it once with real internet access and check
 the server logs for `[parkrunSource]` / `[stationSource]` fallback warnings —

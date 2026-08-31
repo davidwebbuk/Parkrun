@@ -50,6 +50,12 @@ function normalizeRawEvents(raw) {
     );
     if (gbCountryIds.length > 0 && !gbCountryIds.includes(countryId)) continue;
 
+    // seriesid 1 = standard Saturday 5k parkrun. Junior parkrun (2k, Sundays,
+    // different start times) uses a different seriesid and would otherwise
+    // get mixed in here with the wrong start-time assumptions applied to it.
+    const seriesId = firstDefined(props, ["seriesid", "seriesId", "series"]);
+    if (seriesId !== undefined && Number(seriesId) !== 1) continue;
+
     const slug = firstDefined(props, ["eventname", "EventShortName", "eventShortName", "slug"]);
     const longName = firstDefined(props, [
       "EventLongName",
