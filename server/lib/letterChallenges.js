@@ -114,7 +114,9 @@ function buildChallenges({ completedNames, athleteName, reachableEvents }) {
     );
   }
 
-  return challenges;
+  // A finished challenge (missingLetters.length === 0) has nothing left to
+  // recommend - drop it rather than showing an empty "0 missing" line.
+  return challenges.filter((c) => c.missingLetters.length > 0);
 }
 
 module.exports = { ALPHABET, firstChallengeLetter, uniqueLetters, buildChallenges };
