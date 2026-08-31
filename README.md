@@ -86,12 +86,17 @@ response reports the single best (closest) reachable, not-yet-done event
 that would fill it - computed from the heuristic-reachable set, so it
 costs no extra live API calls.
 
-The name challenge needs the parkrunner's display name, which
-`parkrunAthleteSource.js` best-effort extracts from the results page's
-`<title>` tag (stripping known boilerplate words/punctuation, requiring at
-least two name-shaped words left over). This is the least certain part of
-the scrape - if the title format doesn't match what's assumed, it just
-comes back `undefined` and the name challenge is silently omitted, same
+The name challenge needs the parkrunner's display name. The results page's
+`<title>` tag is generic ("results | parkrun UK") and carries no name -
+confirmed against a real profile page - so `parkrunAthleteSource.js`
+instead anchors on the athlete ID itself, which is already known exactly
+(it's the ID we asked for): it looks for a heading (`h1`/`h2`/`h3`)
+containing a `(<athleteId>)`-shaped `<span>`, e.g.
+`<h2>David WEBB&nbsp;<span title="parkrun ID">(A140237)</span></h2>`, strips
+the span out, and takes what's left as the name (normalizing an ALL-CAPS
+surname like "WEBB" to Title Case). If no heading matches that pattern, or
+what's left doesn't look name-shaped (fewer than two words), it comes back
+`undefined` and the name challenge is silently omitted, same
 graceful-degradation pattern as everything else parkrun.org.uk-related in
 this repo.
 

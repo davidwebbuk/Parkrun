@@ -35,30 +35,49 @@ function slugFromHref(href) {
   return match ? match[1].toLowerCase() : undefined;
 }
 
-// Best-effort extraction of the parkrunner's display name, for the "spell
-// your name" letter challenge - unverified against a real page (same
-// caveat as the rest of this file). Tries the <title> tag, stripping
-// common parkrun-site boilerplate words/punctuation/parenthetical athlete
-// numbers, and only accepts what's left if it still looks name-shaped.
-// Returns undefined rather than guessing wrong, since a bad name would
-// produce a bogus, confusing challenge.
-function extractAthleteName($) {
-  let title = $("title").first().text() || "";
-  title = title
-    .replace(/\(.*?\)/g, " ") // parenthetical athlete numbers etc.
-    .replace(/\b(parkrun|parkrunner|results?|profile|athlete|history|all|uk)\b/gi, " ")
-    .replace(/[|:\-–—]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+// Extraction of the parkrunner's display name, for the "spell your name"
+// letter challenge. The <title> tag is generic ("results | parkrun UK") and
+// carries no name - confirmed against a real profile page. The actual name
+// lives in a heading near the top, e.g.:
+//   <h2>David WEBB&nbsp;<span title="parkrun ID">(A140237)</span></h2>
+// (first name normal case, surname in ALL CAPS). Since we already know the
+// exact athlete ID we asked for, anchor on that: find the heading that
+// contains a "(<athleteId>)"-shaped span, strip the span out, and what's
+// left of the heading's text is the name. Returns undefined rather than
+// guessing wrong, since a bad name would produce a bogus, confusing
+// challenge.
+function extractAthleteName($, athleteId) {
+  const idDigits = String(athleteId).replace(/^0+/, "") || "0";
+  const idPattern = new RegExp(`^A?0*${idDigits}$`, "i");
+
+  let nameText;
+  $("h1, h2, h3").each((_, el) => {
+    if (nameText) return;
+    const $el = $(el);
+    const hasIdSpan = $el
+      .find("span")
+      .filter((_, span) => idPattern.test($(span).text().replace(/[()]/g, "").trim())).length > 0;
+    if (!hasIdSpan) return;
+    const clone = $el.clone();
+    clone.find("span").remove();
+    const text = clone.text().replace(/ /g, " ").replace(/\s+/g, " ").trim();
+    if (text) nameText = text;
+  });
+
+  if (!nameText) return undefined;
+
   // Require at least two words (real display names are essentially always
-  // "First Last") - a single leftover word after stripping boilerplate
-  // (e.g. a stray "UK") is more likely noise than an actual name.
+  // "First Last") and that it still looks name-shaped, not stray markup.
   const wordShaped = /^[A-Za-z][A-Za-z'’.\-]*$/;
-  const words = title.split(" ").filter(Boolean);
-  return words.length >= 2 && title.length <= 40 && words.every((w) => wordShaped.test(w)) ? title : undefined;
+  const words = nameText.split(" ").filter(Boolean);
+  if (words.length < 2 || nameText.length > 60 || !words.every((w) => wordShaped.test(w))) return undefined;
+
+  // Normalize an ALL-CAPS surname (e.g. "WEBB") to Title Case; leave
+  // already-mixed-case words (e.g. "David", "McDonald") alone.
+  return words.map((w) => (w === w.toUpperCase() && w.length > 1 ? w[0] + w.slice(1).toLowerCase() : w)).join(" ");
 }
 
-function parseResultsTable(html) {
+function parseResultsTable(html, athleteId) {
   const $ = cheerio.load(html);
 
   const table = $("caption")
@@ -97,7 +116,7 @@ function parseResultsTable(html) {
       if (slug || name) uniqueEvents.add(slug || name);
     });
 
-  return { slugs, names, completedCount: uniqueEvents.size, athleteName: extractAthleteName($) };
+  return { slugs, names, completedCount: uniqueEvents.size, athleteName: extractAthleteName($, athleteId) };
 }
 
 /**
@@ -123,7 +142,7 @@ async function fetchCompletedEvents(athleteIdRaw) {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
-    const data = parseResultsTable(html);
+    const data = parseResultsTable(html, athleteId);
     cache.set(athleteId, { data, fetchedAt: Date.now() });
     return data;
   } catch (err) {
