@@ -145,6 +145,23 @@ Each result's `journey.source` is `"live"` or `"estimated"`, and a live
 result with `journey.usesNonRailTransit: true` gets a "Needs: ..." badge in
 the UI instead of pretending it's pure train.
 
+The results **list** only ever shows confirmed `"live"` results, capped at
+`LIST_DISPLAY_LIMIT` (5) in `app.js` — an `"estimated"` number is often
+optimistic (see the sort/NENDY note below), so it isn't trustworthy enough
+to list as one of a handful of top picks. The **map**, however, still plots
+every heuristic-reachable candidate regardless of source, so you can see
+the fuller picture even though the list is curated. If fewer than 5 live
+results have been found yet, the list shows however many exist (possibly
+zero) with a prompt to click "Show more options".
+
+Because the heuristic under-estimates, sorting by raw `totalMinutes` alone
+would let an unverified `"estimated"` guess rank above a verified `"live"`
+result with a higher-but-real number - burying trustworthy results (and
+picking the wrong NENDY) under numbers that just look better on paper. Both
+the server's post-refinement sort and the frontend's cross-request merge
+sort (`compareResults` in each) rank `"live"` results ahead of `"estimated"`
+ones first, only using `totalMinutes` to break ties within each group.
+
 ## Data-source notes
 
 This was built in a sandboxed environment with no outbound access to

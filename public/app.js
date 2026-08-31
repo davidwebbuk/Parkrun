@@ -7,6 +7,7 @@
   // DEFAULT_LIVE_LIMIT for the server-side half of this.
   const INITIAL_LIVE_LIMIT = 10;
   const MORE_LIVE_LIMIT = 20;
+  const LIST_DISPLAY_LIMIT = 5; // the results list shows at most this many - the map isn't capped
 
   // The heuristic's estimate is systematically optimistic, so a raw sort by
   // totalMinutes alone can rank an unverified "Estimated" guess above a
@@ -151,7 +152,18 @@
 
     mergeResults(body.results);
     const results = [...state.resultsById.values()].sort(compareResults);
-    results.forEach((r, i) => { r.nendy = state.athleteFilterApplied && i === 0; });
+    results.forEach((r) => { r.nendy = false; });
+
+    // The list only shows confirmed-live results (capped at LIST_DISPLAY_LIMIT) -
+    // an "Estimated" number is often optimistic (see git history), so it's not
+    // trustworthy enough to list as one of a handful of top picks. The map
+    // below still plots every heuristic-reachable event, live or not.
+    const liveResults = results.filter((r) => r.journey.source === "live");
+    const displayResults = liveResults.slice(0, LIST_DISPLAY_LIMIT);
+    displayResults.forEach((r, i) => { r.nendy = state.athleteFilterApplied && i === 0; });
+
+    const moreAvailable = state.liveCovered < state.totalHeuristicReachable;
+    el.moreRow.hidden = !moreAvailable;
 
     if (results.length === 0) {
       const reason = state.athleteFilterApplied
@@ -159,11 +171,23 @@
         : "No parkruns found reachable in time with these settings — try relaxing the max journey time.";
       setStatus(el.globalStatus, reason, false);
       el.results.innerHTML = "";
-      el.moreRow.hidden = true;
       return;
     }
 
-    let statusText = `${results.length} parkrun${results.length === 1 ? "" : "s"} reachable in time from ${originStation.name}. ${disclaimer}`;
+    if (displayResults.length === 0) {
+      setStatus(
+        el.globalStatus,
+        `No confirmed live results yet out of ${results.length} reachable candidate(s).` +
+          (moreAvailable ? " Click “Show more options” to check further." : "")
+      );
+      el.results.innerHTML = "";
+      if (moreAvailable) {
+        setStatus(el.moreHint, `${state.totalHeuristicReachable - state.liveCovered} more candidate(s) not yet live-checked.`);
+      }
+      return;
+    }
+
+    let statusText = `Top ${displayResults.length} live-checked parkrun${displayResults.length === 1 ? "" : "s"} reachable in time from ${originStation.name} (${results.length} candidate${results.length === 1 ? "" : "s"} in total - see map). ${disclaimer}`;
     if (eventsSource === "fallback") {
       statusText += " (Using bundled sample parkrun data — live parkrun.com fetch unavailable.)";
     }
@@ -173,16 +197,15 @@
       statusText += ` ${athleteFilter.note}`;
     }
     setStatus(el.globalStatus, statusText);
-    el.results.innerHTML = results.map(resultCardHtml).join("");
+    el.results.innerHTML = displayResults.map(resultCardHtml).join("");
 
-    const moreAvailable = state.liveCovered < state.totalHeuristicReachable;
-    el.moreRow.hidden = !moreAvailable;
     if (moreAvailable) {
-      setStatus(el.moreHint, `${state.totalHeuristicReachable - state.liveCovered} more heuristic-only option(s) not yet live-checked.`);
+      setStatus(el.moreHint, `${state.totalHeuristicReachable - state.liveCovered} more candidate(s) not yet live-checked.`);
     }
 
     // Map is a nice-to-have on top of the text results above - if it fails
     // (CDN blocked, etc.) the results the user actually came for must stay up.
+    // Shows every reachable candidate, not just the live-checked top 5.
     try {
       ensureMap();
       clearMarkers();
