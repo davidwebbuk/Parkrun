@@ -70,6 +70,31 @@ Pass `athleteId` as a query param to `/api/reachable` (or fill in the
 journey, now filtered to events not yet done) is flagged `nendy: true` and
 highlighted in the UI.
 
+### Letter challenges (Alphabet, "PARKRUN", your name)
+
+`server/lib/letterChallenges.js` builds three parkrun tourism "letter
+challenges" from the same completed-events data used for NENDY filtering:
+the full **A-Z Alphabet Challenge**, spelling out **"PARKRUN"**, and
+spelling the parkrunner's **own name** (only when one could be confidently
+extracted - see below). Convention (these are informal community
+challenges with no single canonical rulebook, so this is a documented
+assumption, not a verified rule): a leading "The " is ignored (so "The
+Hague parkrun" counts as **H**, not T), and only the *set* of letters in
+the target word matters, not repeat counts (one "R" event satisfies every
+R in "PARKRUN"). For each letter the parkrunner hasn't covered yet, the
+response reports the single best (closest) reachable, not-yet-done event
+that would fill it - computed from the heuristic-reachable set, so it
+costs no extra live API calls.
+
+The name challenge needs the parkrunner's display name, which
+`parkrunAthleteSource.js` best-effort extracts from the results page's
+`<title>` tag (stripping known boilerplate words/punctuation, requiring at
+least two name-shaped words left over). This is the least certain part of
+the scrape - if the title format doesn't match what's assumed, it just
+comes back `undefined` and the name challenge is silently omitted, same
+graceful-degradation pattern as everything else parkrun.org.uk-related in
+this repo.
+
 ## Journey times: heuristic by default, real transit directions if you configure them
 
 By default there is **no live-timetable integration** — rail journey time is
@@ -223,6 +248,7 @@ server/
     ojpClient.js               SOAP client for National Rail's OJP - built but unused (needs a paid contract, see above)
     journeyProvider.js         tries googleDirectionsClient, falls back to the heuristic
     parkrunAthleteSource.js    fetch + parse a parkrunner's results history for NENDY filtering
+    letterChallenges.js        Alphabet/"PARKRUN"/name letter-challenge progress + opportunities
 public/
   index.html / styles.css / app.js   static frontend (geolocation, postcode, Leaflet map, results)
 data/
@@ -248,7 +274,12 @@ data/
   find anything). `athleteId` is optional — when
   given, events that parkrunner has already done are filtered out, the
   response includes an `athleteFilter` object (`requested`/`applied`/
-  `completedCount`/`note`), and the top result gets `nendy: true`.
+  `completedCount`/`note`), and the top result gets `nendy: true`. When
+  applied, the response also includes a `challenges` array (Alphabet,
+  "PARKRUN", and - when a name could be extracted - the parkrunner's own
+  name), each with `missingLetters` and `opportunities` (the closest
+  reachable event that fills each missing letter) - see "Letter challenges"
+  above.
 
 ## Possible next steps
 

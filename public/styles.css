@@ -157,6 +157,12 @@ label { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
   box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.4);
 }
 
+.challenge { margin-bottom: 0.9rem; }
+.challenge:last-child { margin-bottom: 0; }
+.challenge h3 { margin: 0 0 0.35rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.challenge-opportunities { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
+.challenge-opportunities li { margin-bottom: 0.15rem; }
+
 .result-links a {
   color: var(--accent);
   text-decoration: none;

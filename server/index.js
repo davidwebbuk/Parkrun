@@ -9,6 +9,7 @@ const { defaultStartTime, nextSaturdayAt } = require("./lib/parkrunTiming");
 const googleDirections = require("./lib/googleDirectionsClient");
 const { planJourney } = require("./lib/journeyProvider");
 const { fetchCompletedEvents } = require("./lib/parkrunAthleteSource");
+const { buildChallenges } = require("./lib/letterChallenges");
 
 const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
@@ -183,6 +184,17 @@ app.get("/api/reachable", async (req, res) => {
   // the parkrun itself), not via our guessed station pair, so it can - and
   // sometimes will - pick a different, better real-world station.
   const totalHeuristicReachable = shortlisted.length;
+
+  // Letter challenges (Alphabet, spelling "PARKRUN", spelling the
+  // parkrunner's own name) - computed from the heuristic-reachable set so
+  // it doesn't cost any extra live API calls. `shortlisted` is already
+  // sorted best-first and already excludes events this parkrunner has
+  // done (see the events filter above), so it's exactly the right pool to
+  // search for "closest reachable event that fills a missing letter".
+  const challenges = athleteFilterApplied
+    ? buildChallenges({ completedNames: completed.names, athleteName: completed.athleteName, reachableEvents: shortlisted })
+    : [];
+
   if (googleDirections.isConfigured() && liveLimit > 0) {
     const candidates = shortlisted.slice(liveOffset, liveOffset + liveLimit);
     await mapWithConcurrency(candidates, LIVE_REFINE_CONCURRENCY, async (r) => {
@@ -247,6 +259,9 @@ app.get("/api/reachable", async (req, res) => {
         ? "Couldn't load results for that parkrun ID (private profile, invalid ID, or parkrun.org.uk unreachable) - showing all events."
         : undefined,
     },
+    // Letter challenges (Alphabet, "PARKRUN", the parkrunner's name) - see
+    // server/lib/letterChallenges.js. Empty unless athleteFilter.applied.
+    challenges,
     originStation: {
       id: originStation.id,
       name: originStation.name,

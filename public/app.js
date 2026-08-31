@@ -50,6 +50,8 @@
     moreRow: document.getElementById("more-row"),
     moreBtn: document.getElementById("more-btn"),
     moreHint: document.getElementById("more-hint"),
+    challengesPanel: document.getElementById("challenges-panel"),
+    challengesList: document.getElementById("challenges-list"),
   };
 
   function setStatus(node, text, isError = false) {
@@ -112,6 +114,7 @@
       state.totalHeuristicReachable = 0;
       el.results.innerHTML = "";
       el.moreRow.hidden = true;
+      el.challengesPanel.hidden = true;
     }
     if (!state.lastSearchParams) return;
 
@@ -145,10 +148,15 @@
   }
 
   function renderResults(body) {
-    const { originStation, disclaimer, eventsSource, athleteFilter, liveOffset, liveLimit, totalHeuristicReachable } = body;
+    const { originStation, disclaimer, eventsSource, athleteFilter, liveOffset, liveLimit, totalHeuristicReachable, challenges } = body;
     state.athleteFilterApplied = Boolean(athleteFilter?.applied);
     state.liveCovered = Math.max(state.liveCovered, liveOffset + liveLimit);
     state.totalHeuristicReachable = totalHeuristicReachable;
+
+    // Recomputed fully server-side every call (cheap - no extra API calls),
+    // so the latest response is always the complete, current picture -
+    // no cross-request merging needed here, unlike the live results below.
+    renderChallenges(challenges);
 
     mergeResults(body.results);
     const results = [...state.resultsById.values()].sort(compareResults);
@@ -221,6 +229,26 @@
 
   function fmtTime(iso) {
     return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderChallenges(challenges) {
+    if (!challenges || challenges.length === 0) {
+      el.challengesPanel.hidden = true;
+      return;
+    }
+    el.challengesPanel.hidden = false;
+    el.challengesList.innerHTML = challenges.map((c) => {
+      const opportunityHtml = c.opportunities.length
+        ? `<ul class="challenge-opportunities">${c.opportunities.map((o) => `
+            <li><strong>${escapeHtml(o.letter)}</strong> — ${escapeHtml(o.eventName)} (~${o.totalMinutes} min)</li>
+          `).join("")}</ul>`
+        : `<p class="hint">No reachable event fills any of your ${c.missingLetters.length} missing letter(s) right now.</p>`;
+      return `
+        <div class="challenge">
+          <h3>${escapeHtml(c.label)} <span class="badge">${c.completedLetters}/${c.totalLetters}</span></h3>
+          ${opportunityHtml}
+        </div>`;
+    }).join("");
   }
 
   function resultCardHtml(r) {

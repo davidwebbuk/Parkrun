@@ -35,6 +35,29 @@ function slugFromHref(href) {
   return match ? match[1].toLowerCase() : undefined;
 }
 
+// Best-effort extraction of the parkrunner's display name, for the "spell
+// your name" letter challenge - unverified against a real page (same
+// caveat as the rest of this file). Tries the <title> tag, stripping
+// common parkrun-site boilerplate words/punctuation/parenthetical athlete
+// numbers, and only accepts what's left if it still looks name-shaped.
+// Returns undefined rather than guessing wrong, since a bad name would
+// produce a bogus, confusing challenge.
+function extractAthleteName($) {
+  let title = $("title").first().text() || "";
+  title = title
+    .replace(/\(.*?\)/g, " ") // parenthetical athlete numbers etc.
+    .replace(/\b(parkrun|parkrunner|results?|profile|athlete|history|all|uk)\b/gi, " ")
+    .replace(/[|:\-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Require at least two words (real display names are essentially always
+  // "First Last") - a single leftover word after stripping boilerplate
+  // (e.g. a stray "UK") is more likely noise than an actual name.
+  const wordShaped = /^[A-Za-z][A-Za-z'’.\-]*$/;
+  const words = title.split(" ").filter(Boolean);
+  return words.length >= 2 && title.length <= 40 && words.every((w) => wordShaped.test(w)) ? title : undefined;
+}
+
 function parseResultsTable(html) {
   const $ = cheerio.load(html);
 
@@ -74,15 +97,18 @@ function parseResultsTable(html) {
       if (slug || name) uniqueEvents.add(slug || name);
     });
 
-  return { slugs, names, completedCount: uniqueEvents.size };
+  return { slugs, names, completedCount: uniqueEvents.size, athleteName: extractAthleteName($) };
 }
 
 /**
- * Returns { slugs: Set<string>, names: Set<string> } of events this
- * parkrunner has completed (slugs preferred for matching; names as a
- * fallback for events whose row didn't have a parseable link), or null if
- * the results couldn't be loaded (private profile, invalid ID, fetch
- * failure) - callers should treat null as "don't filter" rather than an error.
+ * Returns { slugs, names, completedCount, athleteName } for this
+ * parkrunner: slugs/names of events completed (slugs preferred for
+ * matching; names as a fallback for events whose row didn't have a
+ * parseable link), and a best-effort display name (undefined if it
+ * couldn't be confidently extracted - see extractAthleteName). Returns
+ * null if the results couldn't be loaded at all (private profile, invalid
+ * ID, fetch failure) - callers should treat null as "don't filter" rather
+ * than an error.
  */
 async function fetchCompletedEvents(athleteIdRaw) {
   const athleteId = normalizeAthleteId(athleteIdRaw);
