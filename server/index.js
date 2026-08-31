@@ -14,15 +14,15 @@ const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
 const DEFAULT_ARRIVAL_BUFFER_MIN = 15; // arrive this many minutes before the start
 const DEFAULT_MAX_TOTAL_MINUTES = 90; // don't bother suggesting long door-to-door trips
-// How many of the heuristic's top candidates get a real live-Directions
-// check. With a tight maxTotalMinutes (e.g. the 60-min default) the
-// heuristic is often optimistic, so a low limit here means most/all of the
-// checked candidates get correctly rejected by live data, leaving only
-// *unchecked* heuristic guesses in the final list - i.e. nothing ever shows
-// "Live" even though it's configured and working. 100 comfortably covers a
-// tight-cutoff candidate set; each one is a billed Google API call, so this
-// scales up API cost if maxTotalMinutes is loosened back up.
-const LIVE_REFINE_LIMIT = 100;
+// Each live-refined candidate is a billed Google Directions call, so rather
+// than always refining every heuristic-reachable candidate (expensive - see
+// git history), a request only refines a slice [liveOffset, liveOffset+liveLimit)
+// of the heuristic-ranked list. The default covers just enough to confidently
+// show the best option (the NENDY, when filtering by parkrun history) plus a
+// few alternates; the frontend's "Show more options" button asks for the next
+// slice on demand, only spending more calls when the user actually wants them.
+const DEFAULT_LIVE_LIMIT = 10;
+const MAX_LIVE_LIMIT = 100; // hard cap regardless of what a request asks for
 const LIVE_REFINE_CONCURRENCY = 8;
 
 /** Runs `worker` over `items` with at most `concurrency` in flight at once. */
@@ -103,6 +103,11 @@ app.get("/api/reachable", async (req, res) => {
 
   const arrivalBufferMin = Number(req.query.arrivalBufferMin) || DEFAULT_ARRIVAL_BUFFER_MIN;
   const maxTotalMinutes = Number(req.query.maxTotalMinutes) || DEFAULT_MAX_TOTAL_MINUTES;
+  const liveOffset = Math.max(0, Number(req.query.liveOffset) || 0);
+  const liveLimit = Math.max(
+    0,
+    Math.min(Number(req.query.liveLimit) || DEFAULT_LIVE_LIMIT, MAX_LIVE_LIMIT - liveOffset)
+  );
 
   const [{ data: stations, source: stationsSource }, { data: allEvents, source: eventsSource }, completed] =
     await Promise.all([
@@ -164,8 +169,9 @@ app.get("/api/reachable", async (req, res) => {
   // googleDirectionsClient.js). Directions routes point-to-point (home to
   // the parkrun itself), not via our guessed station pair, so it can - and
   // sometimes will - pick a different, better real-world station.
-  if (googleDirections.isConfigured()) {
-    const candidates = shortlisted.slice(0, LIVE_REFINE_LIMIT);
+  const totalHeuristicReachable = shortlisted.length;
+  if (googleDirections.isConfigured() && liveLimit > 0) {
+    const candidates = shortlisted.slice(liveOffset, liveOffset + liveLimit);
     await mapWithConcurrency(candidates, LIVE_REFINE_CONCURRENCY, async (r) => {
       const startDate = new Date(r.startDate);
       const requiredArrivalAtParkrun = new Date(startDate.getTime() - arrivalBufferMin * 60000);
@@ -238,6 +244,12 @@ app.get("/api/reachable", async (req, res) => {
     disclaimer: googleDirections.isConfigured()
       ? "Where marked \"Live\", times come from Google's real-time transit directions; everything else is an ESTIMATE based on straight-line distance. A \"needs a bus\" note means the live route isn't pure train. Always double-check before travelling."
       : "Journey times are ESTIMATES based on straight-line distance, not a live timetable. Always double-check with the linked Google Maps transit directions before travelling.",
+    // How much of the heuristic-reachable candidate pool this call actually
+    // live-checked, so the frontend knows whether a "show more options" call
+    // (with a higher liveOffset) would find anything - see DEFAULT_LIVE_LIMIT.
+    liveOffset,
+    liveLimit,
+    totalHeuristicReachable,
     count: reachableResults.length,
     results: reachableResults,
   });

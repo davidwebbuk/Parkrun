@@ -127,12 +127,23 @@ session; if you hit issues, check the server logs for
 `[journeyProvider] Google Directions lookup failed: ...`.
 
 Once configured, `/api/reachable` runs the heuristic across all events as
-before, then spends live Directions lookups only on the top ~20 heuristic
-candidates (6 at a time) to refine their journey times and re-rank — so it
-doesn't hammer the API with one call per parkrun event on every request.
+before, then spends live Directions lookups on a *slice* of the top
+heuristic candidates — `liveOffset`/`liveLimit` query params control which
+slice (8 requests at a time; see `LIVE_REFINE_CONCURRENCY`). The frontend
+asks for a small first slice (10 - `INITIAL_LIVE_LIMIT` in `app.js`), enough
+to confidently show the best option (the NENDY, when filtering by parkrun
+history) plus a few alternates, and only asks for the next slice (20 -
+`MORE_LIVE_LIMIT`) when the user clicks **"Show more options"** — each
+result costs one billed Google API call, so this keeps typical usage far
+below the `MAX_LIVE_LIMIT = 100` hard cap. The frontend merges slices across
+requests by event ID, always preferring a result it already knows is
+`"live"` over a later response that didn't re-check it (each request only
+live-refines its own slice, so unrelated events legitimately come back as
+`"estimated"` in that response even if a previous request already verified
+them - the merge is what stops that from visually "downgrading" a card).
 Each result's `journey.source` is `"live"` or `"estimated"`, and a live
-result with `journey.usesNonRailTransit: true` gets a "Needs a bus" badge
-in the UI instead of pretending it's pure train.
+result with `journey.usesNonRailTransit: true` gets a "Needs: ..." badge in
+the UI instead of pretending it's pure train.
 
 ## Data-source notes
 
@@ -206,12 +217,18 @@ data/
 - `GET /api/stations` — all known rail stations
 - `GET /api/parkruns` — all known GB parkrun events
 - `GET /api/nearest-stations?lat=&lon=&limit=` — nearest stations to a point
-- `GET /api/reachable?lat=&lon=&stationId=&arrivalBufferMin=&maxTotalMinutes=&athleteId=`
+- `GET /api/reachable?lat=&lon=&stationId=&arrivalBufferMin=&maxTotalMinutes=&athleteId=&liveOffset=&liveLimit=`
   — reachable parkruns from a given start point/station, sorted by
   door-to-door time (each result's `journey.source` is `"live"` or
   `"estimated"`, and `journey.usesNonRailTransit` flags a live result that
   needs a bus; the response's `liveTimetableConfigured` says whether
-  Google Directions is switched on at all). `athleteId` is optional — when
+  Google Directions is switched on at all). `liveOffset`/`liveLimit`
+  (defaults `0`/`10`, hard-capped so `liveOffset + liveLimit <= 100`)
+  control which slice of the heuristic-ranked candidates gets a real
+  Google Directions call this request — see "Journey times" above for why,
+  and the response's `totalHeuristicReachable` for how many candidates
+  exist in total (so a caller knows whether a bigger `liveOffset` would
+  find anything). `athleteId` is optional — when
   given, events that parkrunner has already done are filtered out, the
   response includes an `athleteFilter` object (`requested`/`applied`/
   `completedCount`/`note`), and the top result gets `nendy: true`.

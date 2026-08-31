@@ -1,8 +1,22 @@
 (() => {
+  // Each live-refined result is a billed Google Directions call. The first
+  // search only asks the server to live-check a small batch (enough to
+  // confidently surface the NENDY plus a few alternates); "Show more
+  // options" asks for progressively larger batches only when the user
+  // actually wants to spend more of that budget. See server/index.js's
+  // DEFAULT_LIVE_LIMIT for the server-side half of this.
+  const INITIAL_LIVE_LIMIT = 10;
+  const MORE_LIVE_LIMIT = 20;
+
   const state = {
     userLocation: null,
     map: null,
     markers: [],
+    resultsById: new Map(),
+    lastSearchParams: null,
+    liveCovered: 0,
+    totalHeuristicReachable: 0,
+    athleteFilterApplied: false,
   };
 
   const el = {
@@ -18,6 +32,9 @@
     bufferInput: document.getElementById("buffer-input"),
     maxTimeInput: document.getElementById("max-time-input"),
     athleteIdInput: document.getElementById("athlete-id-input"),
+    moreRow: document.getElementById("more-row"),
+    moreBtn: document.getElementById("more-btn"),
+    moreHint: document.getElementById("more-hint"),
   };
 
   function setStatus(node, text, isError = false) {
@@ -61,22 +78,35 @@
     }
   });
 
-  el.findBtn.addEventListener("click", findReachableParkruns);
+  el.findBtn.addEventListener("click", () => runSearch({ reset: true, liveOffset: 0, liveLimit: INITIAL_LIVE_LIMIT }));
+  el.moreBtn.addEventListener("click", () => runSearch({ reset: false, liveOffset: state.liveCovered, liveLimit: MORE_LIVE_LIMIT }));
 
-  async function findReachableParkruns() {
+  async function runSearch({ reset, liveOffset, liveLimit }) {
     if (!state.userLocation) return;
-    const { lat, lon } = state.userLocation;
-    const arrivalBufferMin = Number(el.bufferInput.value) || 15;
-    const maxTotalMinutes = Number(el.maxTimeInput.value) || 90;
-    const athleteId = el.athleteIdInput.value.trim();
 
-    el.findBtn.disabled = true;
-    setStatus(el.globalStatus, "Crunching journey times…");
-    el.results.innerHTML = "";
+    if (reset) {
+      const { lat, lon } = state.userLocation;
+      state.lastSearchParams = {
+        lat, lon,
+        arrivalBufferMin: Number(el.bufferInput.value) || 15,
+        maxTotalMinutes: Number(el.maxTimeInput.value) || 90,
+        athleteId: el.athleteIdInput.value.trim(),
+      };
+      state.resultsById.clear();
+      state.liveCovered = 0;
+      state.totalHeuristicReachable = 0;
+      el.results.innerHTML = "";
+      el.moreRow.hidden = true;
+    }
+    if (!state.lastSearchParams) return;
+
+    const btn = reset ? el.findBtn : el.moreBtn;
+    btn.disabled = true;
+    setStatus(el.globalStatus, reset ? "Crunching journey times…" : "Checking more options…");
 
     try {
-      const params = new URLSearchParams({ lat, lon, arrivalBufferMin, maxTotalMinutes });
-      if (athleteId) params.set("athleteId", athleteId);
+      const params = new URLSearchParams({ ...state.lastSearchParams, liveOffset, liveLimit });
+      if (!state.lastSearchParams.athleteId) params.delete("athleteId");
       const res = await fetch(`/api/reachable?${params.toString()}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Request failed");
@@ -84,23 +114,42 @@
     } catch (err) {
       setStatus(el.globalStatus, `Something went wrong: ${err.message}`, true);
     } finally {
-      el.findBtn.disabled = false;
+      btn.disabled = false;
+    }
+  }
+
+  function mergeResults(newResults) {
+    for (const r of newResults) {
+      const existing = state.resultsById.get(r.id);
+      // Never let a later, unrefined-for-this-call response downgrade a
+      // result we already know is live-verified back to "estimated".
+      if (!existing || existing.journey.source !== "live") {
+        state.resultsById.set(r.id, r);
+      }
     }
   }
 
   function renderResults(body) {
-    const { results, originStation, disclaimer, eventsSource, count, athleteFilter } = body;
+    const { originStation, disclaimer, eventsSource, athleteFilter, liveOffset, liveLimit, totalHeuristicReachable } = body;
+    state.athleteFilterApplied = Boolean(athleteFilter?.applied);
+    state.liveCovered = Math.max(state.liveCovered, liveOffset + liveLimit);
+    state.totalHeuristicReachable = totalHeuristicReachable;
 
-    if (count === 0) {
-      const reason = athleteFilter?.applied
+    mergeResults(body.results);
+    const results = [...state.resultsById.values()].sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
+    results.forEach((r, i) => { r.nendy = state.athleteFilterApplied && i === 0; });
+
+    if (results.length === 0) {
+      const reason = state.athleteFilterApplied
         ? "No unrun parkruns found reachable in time with these settings — try relaxing the max journey time."
         : "No parkruns found reachable in time with these settings — try relaxing the max journey time.";
       setStatus(el.globalStatus, reason, false);
       el.results.innerHTML = "";
+      el.moreRow.hidden = true;
       return;
     }
 
-    let statusText = `${count} parkrun${count === 1 ? "" : "s"} reachable in time from ${originStation.name}. ${disclaimer}`;
+    let statusText = `${results.length} parkrun${results.length === 1 ? "" : "s"} reachable in time from ${originStation.name}. ${disclaimer}`;
     if (eventsSource === "fallback") {
       statusText += " (Using bundled sample parkrun data — live parkrun.com fetch unavailable.)";
     }
@@ -111,6 +160,12 @@
     }
     setStatus(el.globalStatus, statusText);
     el.results.innerHTML = results.map(resultCardHtml).join("");
+
+    const moreAvailable = state.liveCovered < state.totalHeuristicReachable;
+    el.moreRow.hidden = !moreAvailable;
+    if (moreAvailable) {
+      setStatus(el.moreHint, `${state.totalHeuristicReachable - state.liveCovered} more heuristic-only option(s) not yet live-checked.`);
+    }
 
     // Map is a nice-to-have on top of the text results above - if it fails
     // (CDN blocked, etc.) the results the user actually came for must stay up.
