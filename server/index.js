@@ -32,6 +32,14 @@ async function mapWithConcurrency(items, concurrency, worker) {
 
 function recomputeReachability({ journey, startDate, arrivalBufferMin, maxTotalMinutes }) {
   const requiredArrivalDate = new Date(startDate.getTime() - arrivalBufferMin * 60000);
+
+  // Live data can come back with a definitive "no" (see journeyProvider.js) -
+  // that's authoritative and skips the heuristic date math entirely, rather
+  // than letting it silently re-derive a wrong "reachable" from stale numbers.
+  if (journey.definitivelyUnreachable) {
+    return { requiredArrivalDate, departureDate: requiredArrivalDate, reachable: false };
+  }
+
   const departureDate = new Date(requiredArrivalDate.getTime() - journey.totalMinutes * 60000);
   const departureHour = departureDate.getHours() + departureDate.getMinutes() / 60;
   const sameDay = departureDate.toDateString() === startDate.toDateString();

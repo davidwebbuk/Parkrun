@@ -123,7 +123,9 @@ async function realtimeJourneyPlan({ originCRS, destinationCRS, departBy, direct
 
   const fault = envelopeBody.RealtimeJourneyPlanFault;
   if (fault) {
-    throw new Error(`OJP fault ${fault.response}: ${fault.responseDetails || ""}`);
+    const err = new Error(`OJP fault ${fault.response}: ${fault.responseDetails || ""}`);
+    err.ojpFault = fault.response; // e.g. "NoJourneysFound" - see guide section 6 for the full enum
+    throw err;
   }
 
   const response = envelopeBody.RealtimeJourneyPlanResponse;

@@ -1,6 +1,23 @@
 const ojpClient = require("./ojpClient");
 const { estimateJourney } = require("./journeyEstimate");
 
+// OJP fault codes (guide section 6, wire values from section 7.8's examples)
+// that mean "we definitively could not find a rail journey" rather than "the
+// API call itself failed". Definitive means this pair should be reported as
+// NOT reachable, never silently patched over with the heuristic guess - the
+// whole reason to wire up live data is to catch exactly the case where the
+// heuristic assumes a train service that doesn't actually exist.
+const DEFINITIVE_NO_ROUTE_FAULTS = new Set(["NoJourneysFound", "MatchingJourneyNotFound"]);
+
+function unreachableResult(heuristic, reason) {
+  return {
+    ...heuristic,
+    source: "live",
+    definitivelyUnreachable: true,
+    unreachableReason: reason,
+  };
+}
+
 /**
  * Tries a live OJP RealtimeJourneyPlan lookup between two stations, and
  * folds the best matching journey into the same shape estimateJourney()
@@ -43,7 +60,10 @@ async function planJourney({ userLocation, originStation, destStation, parkrunLo
       .sort((a, b) => b.arrival.getTime() - a.arrival.getTime()); // latest viable departure first
 
     if (viable.length === 0) {
-      return { ...heuristic, source: "estimated" };
+      // OJP found real journeys, but none get to the destination station in
+      // time - that's a definitive answer, not a reason to fall back to the
+      // (less trustworthy) heuristic guess.
+      return unreachableResult(heuristic, "No live journey arrives in time");
     }
 
     const best = viable[0].journey;
@@ -66,6 +86,9 @@ async function planJourney({ userLocation, originStation, destStation, parkrunLo
       operators: [...new Set(best.legs.map((l) => l.operator).filter(Boolean))],
     };
   } catch (err) {
+    if (err.ojpFault && DEFINITIVE_NO_ROUTE_FAULTS.has(err.ojpFault)) {
+      return unreachableResult(heuristic, err.ojpFault);
+    }
     console.error(`[journeyProvider] live OJP lookup failed (${originStation.crs}->${destStation.crs}), falling back to estimate:`, err.message);
     return { ...heuristic, source: "estimated" };
   }
