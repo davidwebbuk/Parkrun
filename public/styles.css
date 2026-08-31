@@ -127,6 +127,11 @@ label { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
   color: var(--accent);
 }
 
+.badge-live {
+  background: rgba(35, 140, 90, 0.15);
+  color: #1e8a5a;
+}
+
 .result-links a {
   color: var(--accent);
   text-decoration: none;

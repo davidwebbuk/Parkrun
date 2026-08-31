@@ -17,6 +17,13 @@ const NAME_KEYS = ["CommonName", "CommonNameLang1", "StopName", "Name"];
 const LAT_KEYS = ["Latitude", "Lat"];
 const LON_KEYS = ["Longitude", "Lon", "Long"];
 const ATCO_KEYS = ["ATCOCode", "AtcoCode", "ATCO_Code"];
+// NaPTAN is a general public-transport dataset, not rail-specific, so a CRS
+// (National Rail's 3-letter station code) column is NOT confirmed present -
+// these are best-guess candidates, unverified against a live fetch. Without
+// a resolved CRS, a station can still be used for distance/heuristic
+// purposes but not for a live OJP RealtimeJourneyPlan call (see
+// ojpClient.js), which addresses stations by CRS code.
+const CRS_KEYS = ["CrsRef", "CrsCode", "StationCRS", "Crs"];
 
 function firstColumn(row, keys) {
   for (const key of keys) {
@@ -42,6 +49,7 @@ function normalizeCsvRows(rows) {
       name,
       lat,
       lon,
+      crs: firstColumn(row, CRS_KEYS),
     });
   }
 

@@ -140,11 +140,12 @@
   }
 
   function resultCardHtml(r) {
+    const isLive = r.journey.source === "live";
     return `
       <article class="result-card">
         <h3>${escapeHtml(r.name)}</h3>
         <div class="result-meta">
-          <span class="badge">Estimated</span>
+          <span class="badge${isLive ? " badge-live" : ""}">${isLive ? "Live" : "Estimated"}</span>
           <span>Starts ${escapeHtml(r.startTime)}</span>
           <span>Leave by ~${fmtTime(r.requiredDepartureTime)}</span>
           <span>~${r.journey.totalMinutes} min door-to-door</span>
