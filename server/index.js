@@ -39,6 +39,19 @@ async function mapWithConcurrency(items, concurrency, worker) {
   return results;
 }
 
+// The heuristic's estimate is systematically optimistic (it doesn't know
+// about real interchange waits, indirect routing, etc. - see git history),
+// so a raw sort by totalMinutes alone can rank an unverified "Estimated"
+// guess above a verified "Live" result with a higher-but-real number,
+// burying trustworthy results under numbers that just look better on paper.
+// Live always sorts first; totalMinutes only breaks ties within each group.
+function compareResults(a, b) {
+  const aLive = a.journey.source === "live" ? 0 : 1;
+  const bLive = b.journey.source === "live" ? 0 : 1;
+  if (aLive !== bLive) return aLive - bLive;
+  return a.journey.totalMinutes - b.journey.totalMinutes;
+}
+
 function recomputeReachability({ journey, startDate, arrivalBufferMin, maxTotalMinutes }) {
   const requiredArrivalDate = new Date(startDate.getTime() - arrivalBufferMin * 60000);
 
@@ -162,7 +175,7 @@ app.get("/api/reachable", async (req, res) => {
 
   let shortlisted = heuristicResults
     .filter((r) => r.reachable)
-    .sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
+    .sort(compareResults);
 
   // Phase 2: for the most promising candidates, replace the heuristic with a
   // real Google Directions (transit) lookup, if configured (see
@@ -189,7 +202,7 @@ app.get("/api/reachable", async (req, res) => {
       r.requiredDepartureTime = departureDate;
       r.reachable = reachable;
     });
-    shortlisted = shortlisted.filter((r) => r.reachable).sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
+    shortlisted = shortlisted.filter((r) => r.reachable).sort(compareResults);
   }
 
   const reachableResults = shortlisted.map((r, index) => {

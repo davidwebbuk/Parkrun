@@ -8,6 +8,20 @@
   const INITIAL_LIVE_LIMIT = 10;
   const MORE_LIVE_LIMIT = 20;
 
+  // The heuristic's estimate is systematically optimistic, so a raw sort by
+  // totalMinutes alone can rank an unverified "Estimated" guess above a
+  // verified "Live" result with a higher-but-real number - burying
+  // trustworthy results (and picking the wrong NENDY) under numbers that
+  // just look better on paper. Live always sorts first (mirrors
+  // server/index.js's compareResults, needed here too since merging across
+  // requests happens client-side).
+  function compareResults(a, b) {
+    const aLive = a.journey.source === "live" ? 0 : 1;
+    const bLive = b.journey.source === "live" ? 0 : 1;
+    if (aLive !== bLive) return aLive - bLive;
+    return a.journey.totalMinutes - b.journey.totalMinutes;
+  }
+
   const state = {
     userLocation: null,
     map: null,
@@ -136,7 +150,7 @@
     state.totalHeuristicReachable = totalHeuristicReachable;
 
     mergeResults(body.results);
-    const results = [...state.resultsById.values()].sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
+    const results = [...state.resultsById.values()].sort(compareResults);
     results.forEach((r, i) => { r.nendy = state.athleteFilterApplied && i === 0; });
 
     if (results.length === 0) {

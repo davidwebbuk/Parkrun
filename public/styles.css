@@ -20,6 +20,12 @@
 
 * { box-sizing: border-box; }
 
+/* [hidden] and .row (display: flex) have equal CSS specificity, and .row's
+   explicit `display` would otherwise win by being defined later in this
+   file - this makes `hidden` always take priority regardless of what other
+   display-setting classes an element also carries. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
