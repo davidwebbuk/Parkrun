@@ -90,8 +90,8 @@
     if (!state.userLocation) return;
     const { lat, lon } = state.userLocation;
     const stationId = el.stationSelect.value;
-    const arrivalBufferMin = Number(el.bufferInput.value) || 10;
-    const maxTotalMinutes = Number(el.maxTimeInput.value) || 240;
+    const arrivalBufferMin = Number(el.bufferInput.value) || 15;
+    const maxTotalMinutes = Number(el.maxTimeInput.value) || 60;
 
     el.findBtn.disabled = true;
     setStatus(el.globalStatus, "Crunching train times…");

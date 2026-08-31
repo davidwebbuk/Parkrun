@@ -11,8 +11,8 @@ const { planJourney } = require("./lib/journeyProvider");
 
 const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
-const DEFAULT_ARRIVAL_BUFFER_MIN = 10; // arrive this many minutes before the start
-const DEFAULT_MAX_TOTAL_MINUTES = 240; // don't bother suggesting 4h+ door-to-door trips
+const DEFAULT_ARRIVAL_BUFFER_MIN = 15; // arrive this many minutes before the start
+const DEFAULT_MAX_TOTAL_MINUTES = 60; // don't bother suggesting long door-to-door trips
 const LIVE_REFINE_LIMIT = 20; // only spend live Directions calls on this many top heuristic candidates
 const LIVE_REFINE_CONCURRENCY = 6;
 
