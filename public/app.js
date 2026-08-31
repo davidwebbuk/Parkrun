@@ -112,11 +112,6 @@
 
   function renderResults(body) {
     const { results, originStation, disclaimer, eventsSource, count } = body;
-    el.mapPanel.hidden = false;
-    ensureMap();
-    clearMarkers();
-    addMarker(state.userLocation.lat, state.userLocation.lon, "You", "blue");
-    addMarker(originStation.lat, originStation.lon, `Departure: ${originStation.name}`, "black");
 
     if (count === 0) {
       setStatus(el.globalStatus, "No parkruns found reachable in time with these settings — try relaxing the max journey time.", false);
@@ -129,10 +124,21 @@
       statusText += " (Using bundled sample parkrun data — live parkrun.com fetch unavailable.)";
     }
     setStatus(el.globalStatus, statusText);
-
     el.results.innerHTML = results.map(resultCardHtml).join("");
-    results.forEach((r) => addMarker(r.lat, r.lon, r.name, "green"));
-    fitMapToMarkers();
+
+    // Map is a nice-to-have on top of the text results above - if it fails
+    // (CDN blocked, etc.) the results the user actually came for must stay up.
+    try {
+      ensureMap();
+      clearMarkers();
+      addMarker(state.userLocation.lat, state.userLocation.lon, "You", "blue");
+      addMarker(originStation.lat, originStation.lon, `Departure: ${originStation.name}`, "black");
+      results.forEach((r) => addMarker(r.lat, r.lon, r.name, "green"));
+      fitMapToMarkers();
+    } catch (err) {
+      console.error("Map rendering failed, continuing without it:", err);
+      el.mapPanel.hidden = true;
+    }
   }
 
   function fmtTime(iso) {
@@ -165,8 +171,15 @@
     }[c]));
   }
 
+  // Leaflet loads from a CDN (see index.html) - if that's blocked (ad-blocker,
+  // restrictive network, CDN hiccup) the map is just unavailable. That must
+  // never take down the text results, which are the app's actual point.
   function ensureMap() {
     if (state.map || !state.userLocation) return;
+    if (typeof L === "undefined") {
+      el.mapPanel.hidden = true;
+      return;
+    }
     el.mapPanel.hidden = false;
     state.map = L.map("map").setView([state.userLocation.lat, state.userLocation.lon], 7);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -180,6 +193,7 @@
   }
 
   function addMarker(lat, lon, label, color) {
+    if (!state.map) return;
     const marker = L.circleMarker([lat, lon], {
       radius: 7,
       color,
@@ -191,7 +205,7 @@
   }
 
   function fitMapToMarkers() {
-    if (state.markers.length === 0) return;
+    if (!state.map || state.markers.length === 0) return;
     const group = L.featureGroup(state.markers);
     state.map.fitBounds(group.getBounds().pad(0.15));
   }
