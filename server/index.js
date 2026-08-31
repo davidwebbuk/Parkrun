@@ -13,8 +13,16 @@ const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
 const DEFAULT_ARRIVAL_BUFFER_MIN = 15; // arrive this many minutes before the start
 const DEFAULT_MAX_TOTAL_MINUTES = 60; // don't bother suggesting long door-to-door trips
-const LIVE_REFINE_LIMIT = 20; // only spend live Directions calls on this many top heuristic candidates
-const LIVE_REFINE_CONCURRENCY = 6;
+// How many of the heuristic's top candidates get a real live-Directions
+// check. With a tight maxTotalMinutes (e.g. the 60-min default) the
+// heuristic is often optimistic, so a low limit here means most/all of the
+// checked candidates get correctly rejected by live data, leaving only
+// *unchecked* heuristic guesses in the final list - i.e. nothing ever shows
+// "Live" even though it's configured and working. 100 comfortably covers a
+// tight-cutoff candidate set; each one is a billed Google API call, so this
+// scales up API cost if maxTotalMinutes is loosened back up.
+const LIVE_REFINE_LIMIT = 100;
+const LIVE_REFINE_CONCURRENCY = 8;
 
 /** Runs `worker` over `items` with at most `concurrency` in flight at once. */
 async function mapWithConcurrency(items, concurrency, worker) {
