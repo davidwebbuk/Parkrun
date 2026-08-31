@@ -59,6 +59,7 @@ async function planJourney({ userLocation, originStation, destStation, parkrunLo
       liveDeparture: best.departureTime !== undefined ? new Date(best.departureTime * 1000).toISOString() : undefined,
       liveArrival: best.arrivalTime !== undefined ? new Date(best.arrivalTime * 1000).toISOString() : undefined,
       usesNonRailTransit: best.usesNonRailTransit,
+      nonRailSummary: best.nonRailSummary,
       viaStationName: best.firstStation,
       viaStationLocation: best.firstStationLocation
         ? { lat: best.firstStationLocation.lat, lon: best.firstStationLocation.lng }

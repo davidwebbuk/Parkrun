@@ -51,7 +51,9 @@ function normalizeRoute(route) {
   });
 
   const transitSteps = steps.filter((s) => s.mode === "TRANSIT");
-  const usesNonRailTransit = transitSteps.some((s) => !RAIL_VEHICLE_TYPES.has(s.vehicleType));
+  const nonRailVehicleTypes = [...new Set(
+    transitSteps.map((s) => s.vehicleType).filter((t) => !RAIL_VEHICLE_TYPES.has(t))
+  )];
 
   return {
     durationMin: Math.round(leg.duration.value / 60),
@@ -59,11 +61,35 @@ function normalizeRoute(route) {
     arrivalTime: leg.arrival_time?.value,
     transitSteps,
     interchanges: Math.max(0, transitSteps.length - 1),
-    usesNonRailTransit,
+    usesNonRailTransit: nonRailVehicleTypes.length > 0,
+    nonRailSummary: nonRailVehicleTypes.length > 0 ? summarizeVehicleTypes(nonRailVehicleTypes) : undefined,
     firstStation: transitSteps[0]?.departureStop,
     firstStationLocation: transitSteps[0]?.departureLocation,
     lastStation: transitSteps[transitSteps.length - 1]?.arrivalStop,
   };
+}
+
+// Friendly labels for Google's transit vehicle types (see
+// https://developers.google.com/maps/documentation/directions/get-directions#VehicleType).
+// Used to describe what a live route actually needs beyond a plain train,
+// e.g. "Needs: Underground" rather than a blanket, sometimes-wrong "bus".
+const VEHICLE_TYPE_LABELS = {
+  BUS: "bus",
+  INTERCITY_BUS: "coach",
+  TROLLEYBUS: "bus",
+  SHARE_TAXI: "shared taxi",
+  SUBWAY: "Underground",
+  TRAM: "tram",
+  MONORAIL: "monorail",
+  FERRY: "ferry",
+  CABLE_CAR: "cable car",
+  GONDOLA_LIFT: "cable car",
+  FUNICULAR: "funicular",
+  OTHER: "other transport",
+};
+
+function summarizeVehicleTypes(types) {
+  return types.map((t) => VEHICLE_TYPE_LABELS[t] || t.toLowerCase().replace(/_/g, " ")).join(" + ");
 }
 
 /**
