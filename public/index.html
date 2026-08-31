@@ -29,15 +29,11 @@
       <p id="location-status" class="status"></p>
     </section>
 
-    <section class="panel" id="station-panel" hidden>
-      <h2>2. Departure station</h2>
-      <p>We picked the nearest station. Change it if you'd rather start from somewhere else.</p>
-      <select id="station-select"></select>
-    </section>
-
     <section class="panel" id="options-panel" hidden>
-      <h2>3. Options</h2>
+      <h2>2. Options</h2>
       <p class="hint">
+        Journeys can mix train, bus, tube, or tram - Google picks the real best route
+        from wherever you are, so there's no need to pick a departure station.
         Add your parkrun ID to hide events you've already done, and highlight your
         <abbr title="Nearest Event Not Done Yet">NENDY</abbr> - the easiest-to-reach
         one you haven't run yet. Uses your public results history from parkrun.org.uk.
@@ -48,7 +44,7 @@
           minutes before the start
         </label>
         <label>Max door-to-door time
-          <input id="max-time-input" type="number" min="15" max="360" step="15" value="60" />
+          <input id="max-time-input" type="number" min="15" max="360" step="15" value="90" />
           minutes
         </label>
         <label>parkrun ID (optional)

@@ -3,10 +3,12 @@
 A small website that answers: **"which UK parkruns can I reach in time for the
 9am start using nothing but public transport?"**
 
-Give it your location (GPS or a postcode), pick a departure station, and it
-estimates which parkrun events you could realistically get to by train,
-sorted by how easy the trip is, with a map and a one-click link to check the
-real directions on Google Maps.
+Give it your location (GPS or a postcode) and it estimates which parkrun
+events you could realistically get to by public transport, sorted by how
+easy the trip is, with a map and a one-click link to check the real
+directions on Google Maps. No need to pick a departure station — when live
+data is configured (see below), Google picks the real best route (train,
+bus, tube, tram, or a mix) from wherever you actually are.
 
 ## How it works
 
@@ -15,8 +17,11 @@ real directions on Google Maps.
    browser).
 2. **Nearest stations** — the backend loads the
    [NaPTAN](https://naptan.api.dft.gov.uk/) open dataset (DfT, Open
-   Government Licence), filtered to rail stations (`StopTypes=RLY`), and
-   finds the closest ones to you by straight-line distance.
+   Government Licence), filtered to rail stations (`StopTypes=RLY`, plus a
+   client-side filter - see "Data-source notes"), and uses the closest one
+   to you (by straight-line distance) as the heuristic's origin point. This
+   is purely a backend implementation detail now, not something you pick -
+   see "Adding real timetables" for why.
 3. **parkrun events** — the backend loads
    [`https://images.parkrun.com/events.json`](https://images.parkrun.com/events.json),
    filtered down to GB events (detected dynamically from the `countries`
@@ -26,7 +31,8 @@ real directions on Google Maps.
    works out what time you'd need to leave home for a Saturday start (09:00
    for England/Wales, 09:30 for Scotland/Northern Ireland, correctly
    converted between GMT and BST), and flags the event as reachable if that
-   departure time is realistic.
+   departure time is realistic. This heuristic estimate is refined with a
+   real Google Directions lookup where configured (see below).
 5. **Results** — a sortable list plus a Leaflet/OpenStreetMap map, each
    result linking out to a pre-filled Google Maps *transit directions* URL
    (`google.com/maps/dir/?api=1&...&travelmode=transit`) so you can check the

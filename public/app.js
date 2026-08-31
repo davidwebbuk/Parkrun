@@ -1,7 +1,6 @@
 (() => {
   const state = {
     userLocation: null,
-    stations: [],
     map: null,
     markers: [],
   };
@@ -9,10 +8,8 @@
   const el = {
     locationStatus: document.getElementById("location-status"),
     globalStatus: document.getElementById("global-status"),
-    stationPanel: document.getElementById("station-panel"),
     optionsPanel: document.getElementById("options-panel"),
     mapPanel: document.getElementById("map-panel"),
-    stationSelect: document.getElementById("station-select"),
     results: document.getElementById("results"),
     useLocationBtn: document.getElementById("use-location-btn"),
     postcodeForm: document.getElementById("postcode-form"),
@@ -31,9 +28,7 @@
   async function onLocationResolved(lat, lon, label) {
     state.userLocation = { lat, lon };
     setStatus(el.locationStatus, `${label} (${lat.toFixed(4)}, ${lon.toFixed(4)})`);
-    el.stationPanel.hidden = false;
     el.optionsPanel.hidden = false;
-    await loadNearestStations();
     ensureMap();
   }
 
@@ -66,41 +61,21 @@
     }
   });
 
-  async function loadNearestStations() {
-    const { lat, lon } = state.userLocation;
-    setStatus(el.globalStatus, "Finding nearby stations…");
-    const res = await fetch(`/api/nearest-stations?lat=${lat}&lon=${lon}&limit=15`);
-    const body = await res.json();
-    state.stations = body.stations || [];
-    el.stationSelect.innerHTML = "";
-    state.stations.forEach((s, idx) => {
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = `${s.name} (${s.distanceKm.toFixed(1)} km away)`;
-      if (idx === 0) opt.selected = true;
-      el.stationSelect.appendChild(opt);
-    });
-    setStatus(el.globalStatus, body.source === "fallback"
-      ? "Using bundled sample station data (live NaPTAN fetch unavailable)."
-      : "");
-  }
-
   el.findBtn.addEventListener("click", findReachableParkruns);
 
   async function findReachableParkruns() {
     if (!state.userLocation) return;
     const { lat, lon } = state.userLocation;
-    const stationId = el.stationSelect.value;
     const arrivalBufferMin = Number(el.bufferInput.value) || 15;
-    const maxTotalMinutes = Number(el.maxTimeInput.value) || 60;
+    const maxTotalMinutes = Number(el.maxTimeInput.value) || 90;
     const athleteId = el.athleteIdInput.value.trim();
 
     el.findBtn.disabled = true;
-    setStatus(el.globalStatus, "Crunching train times…");
+    setStatus(el.globalStatus, "Crunching journey times…");
     el.results.innerHTML = "";
 
     try {
-      const params = new URLSearchParams({ lat, lon, stationId, arrivalBufferMin, maxTotalMinutes });
+      const params = new URLSearchParams({ lat, lon, arrivalBufferMin, maxTotalMinutes });
       if (athleteId) params.set("athleteId", athleteId);
       const res = await fetch(`/api/reachable?${params.toString()}`);
       const body = await res.json();

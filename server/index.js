@@ -13,7 +13,7 @@ const { fetchCompletedEvents } = require("./lib/parkrunAthleteSource");
 const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
 const DEFAULT_ARRIVAL_BUFFER_MIN = 15; // arrive this many minutes before the start
-const DEFAULT_MAX_TOTAL_MINUTES = 60; // don't bother suggesting long door-to-door trips
+const DEFAULT_MAX_TOTAL_MINUTES = 90; // don't bother suggesting long door-to-door trips
 // How many of the heuristic's top candidates get a real live-Directions
 // check. With a tight maxTotalMinutes (e.g. the 60-min default) the
 // heuristic is often optimistic, so a low limit here means most/all of the
