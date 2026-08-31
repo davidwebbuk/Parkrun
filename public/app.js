@@ -147,11 +147,13 @@
 
   function resultCardHtml(r) {
     const isLive = r.journey.source === "live";
+    const needsBus = isLive && r.journey.usesNonRailTransit;
     return `
       <article class="result-card">
         <h3>${escapeHtml(r.name)}</h3>
         <div class="result-meta">
           <span class="badge${isLive ? " badge-live" : ""}">${isLive ? "Live" : "Estimated"}</span>
+          ${needsBus ? `<span class="badge badge-warn">Needs a bus</span>` : ""}
           <span>Starts ${escapeHtml(r.startTime)}</span>
           <span>Leave by ~${fmtTime(r.requiredDepartureTime)}</span>
           <span>~${r.journey.totalMinutes} min door-to-door</span>

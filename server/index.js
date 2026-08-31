@@ -6,14 +6,14 @@ const { fetchStations } = require("./lib/stationSource");
 const { nearest } = require("./lib/geo");
 const { estimateJourney } = require("./lib/journeyEstimate");
 const { defaultStartTime, nextSaturdayAt } = require("./lib/parkrunTiming");
-const ojpClient = require("./lib/ojpClient");
+const googleDirections = require("./lib/googleDirectionsClient");
 const { planJourney } = require("./lib/journeyProvider");
 
 const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
 const DEFAULT_ARRIVAL_BUFFER_MIN = 10; // arrive this many minutes before the start
 const DEFAULT_MAX_TOTAL_MINUTES = 240; // don't bother suggesting 4h+ door-to-door trips
-const LIVE_REFINE_LIMIT = 20; // only spend live OJP calls on this many top heuristic candidates
+const LIVE_REFINE_LIMIT = 20; // only spend live Directions calls on this many top heuristic candidates
 const LIVE_REFINE_CONCURRENCY = 6;
 
 /** Runs `worker` over `items` with at most `concurrency` in flight at once. */
@@ -136,20 +136,21 @@ app.get("/api/reachable", async (req, res) => {
     .sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
 
   // Phase 2: for the most promising candidates, replace the heuristic with a
-  // real OJP RealtimeJourneyPlan lookup, if configured (see ojpClient.js).
-  if (ojpClient.isConfigured()) {
+  // real Google Directions (transit) lookup, if configured (see
+  // googleDirectionsClient.js). Directions routes point-to-point (home to
+  // the parkrun itself), not via our guessed station pair, so it can - and
+  // sometimes will - pick a different, better real-world station.
+  if (googleDirections.isConfigured()) {
     const candidates = shortlisted.slice(0, LIVE_REFINE_LIMIT);
     await mapWithConcurrency(candidates, LIVE_REFINE_CONCURRENCY, async (r) => {
       const startDate = new Date(r.startDate);
-      const requiredArrivalAtStation = new Date(
-        startDate.getTime() - arrivalBufferMin * 60000 - r.journey.walkFromStationMin * 60000
-      );
+      const requiredArrivalAtParkrun = new Date(startDate.getTime() - arrivalBufferMin * 60000);
       const refined = await planJourney({
         userLocation,
         originStation,
         destStation: r.destStation,
         parkrunLocation: { lat: r.lat, lon: r.lon },
-        requiredArrivalDate: requiredArrivalAtStation,
+        requiredArrivalDate: requiredArrivalAtParkrun,
       });
       const { departureDate, reachable } = recomputeReachability({
         journey: refined, startDate, arrivalBufferMin, maxTotalMinutes,
@@ -161,31 +162,37 @@ app.get("/api/reachable", async (req, res) => {
     shortlisted = shortlisted.filter((r) => r.reachable).sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
   }
 
-  const reachableResults = shortlisted.map((r) => ({
-    id: r.id,
-    name: r.name,
-    lat: r.lat,
-    lon: r.lon,
-    url: r.url,
-    startTime: r.startTime,
-    startDate: r.startDate.toISOString(),
-    destStation: {
-      id: r.destStation.id,
-      name: r.destStation.name,
-      lat: r.destStation.lat,
-      lon: r.destStation.lon,
-      walkFromStationMin: r.journey.walkFromStationMin,
-    },
-    journey: r.journey,
-    requiredDepartureTime: r.requiredDepartureTime.toISOString(),
-    reachable: r.reachable,
-    mapsUrl: r.mapsUrl,
-  }));
+  const reachableResults = shortlisted.map((r) => {
+    // Live results route point-to-point and may use a different station
+    // than our heuristic guess - show the one Directions actually picked.
+    const liveStationName = r.journey.viaStationName;
+    const liveStationLocation = r.journey.viaStationLocation;
+    return {
+      id: r.id,
+      name: r.name,
+      lat: r.lat,
+      lon: r.lon,
+      url: r.url,
+      startTime: r.startTime,
+      startDate: r.startDate.toISOString(),
+      destStation: {
+        id: r.destStation.id,
+        name: liveStationName || r.destStation.name,
+        lat: liveStationLocation ? liveStationLocation.lat : r.destStation.lat,
+        lon: liveStationLocation ? liveStationLocation.lon : r.destStation.lon,
+        walkFromStationMin: r.journey.walkFromStationMin,
+      },
+      journey: r.journey,
+      requiredDepartureTime: r.requiredDepartureTime.toISOString(),
+      reachable: r.reachable,
+      mapsUrl: r.mapsUrl,
+    };
+  });
 
   res.json({
     stationsSource,
     eventsSource,
-    liveTimetableConfigured: ojpClient.isConfigured(),
+    liveTimetableConfigured: googleDirections.isConfigured(),
     originStation: {
       id: originStation.id,
       name: originStation.name,
@@ -193,8 +200,8 @@ app.get("/api/reachable", async (req, res) => {
       lon: originStation.lon,
     },
     arrivalBufferMin,
-    disclaimer: ojpClient.isConfigured()
-      ? "Where marked \"Live\", times come from National Rail's real-time journey planner; everything else is an ESTIMATE based on straight-line distance. Always double-check before travelling."
+    disclaimer: googleDirections.isConfigured()
+      ? "Where marked \"Live\", times come from Google's real-time transit directions; everything else is an ESTIMATE based on straight-line distance. A \"needs a bus\" note means the live route isn't pure train. Always double-check before travelling."
       : "Journey times are ESTIMATES based on straight-line distance, not a live timetable. Always double-check with the linked Google Maps transit directions before travelling.",
     count: reachableResults.length,
     results: reachableResults,

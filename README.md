@@ -32,114 +32,101 @@ real directions on Google Maps.
    (`google.com/maps/dir/?api=1&...&travelmode=transit`) so you can check the
    actual live timetable in one click.
 
-## Journey times: heuristic by default, real timetables if you configure them
+## Journey times: heuristic by default, real transit directions if you configure them
 
-By default there is **no live rail-timetable integration** — rail journey
-time is approximated from straight-line distance between stations
-(`server/lib/journeyEstimate.js`):
+By default there is **no live-timetable integration** — rail journey time is
+approximated from straight-line distance between stations
+(`server/lib/journeyEstimate.js`): distance × a route "wiggle" factor ÷ an
+assumed average speed, a penalty per assumed interchange, a station-arrival
+buffer, plus walk times.
 
-- distance × a route "wiggle" factor ÷ an assumed average speed
-- a fixed 15-minute penalty per assumed interchange (one per ~50km, capped at 3)
-- a 10-minute station-arrival buffer, plus walk times at 4.5 km/h
+This is a *rough planning filter*, not a real timetable, and it has a sharp
+edge: it assumes a sensible train service exists between any two nearby
+stations based on distance alone, with **no idea whether the rail network
+actually connects them**. In testing this showed several parkruns as
+"reachable by train" that were only actually reachable by bus (sometimes
+two) — the heuristic has no way to know that. Every result links to real
+Google Maps transit directions so you can double check regardless.
 
-This is a *rough planning filter*, not a real timetable — it will be wrong
-for routes with awkward connections or infrequent rural lines. Every result
-also links to real Google Maps transit directions so you can double check.
+### Adding real timetables
 
-### Adding real timetables (National Rail OJP RTJP)
+**National Rail's OJP (Online Journey Planner) Real Time Journey Planner**
+looked like the ideal fit — a proper multi-leg SOAP API returning real
+departure/arrival times per leg — and `server/lib/ojpClient.js` implements
+it correctly (verified against the guide's own documented request/response
+examples). **It turned out not to be usable here**: per National Rail's own
+docs, OJP access requires a formal paid contract with the Rail Delivery
+Group ("chargeable at cost-recovery rates"), not a self-serve API key — so
+it's not wired into the app by default. The client code is still in the
+repo in case that changes; see `.env.example` for how to point it at a real
+account if you go through that process.
 
-National Rail Enquiries offers a proper multi-leg journey planner API — the
-**OJP (Online Journey Planner) Real Time Journey Planner web service**,
-documented in National Rail's own "RTJP User Guide" (P82571002 Issue 10;
-**not included in this repo** — it's marked confidential/Thales copyright,
-reproduction not permitted — get it from your raildata.org.uk account or
-National Rail Enquiries), reachable via
-an account on [raildata.org.uk](https://raildata.org.uk). It's a SOAP 1.1
-service (not REST/JSON) whose `RealtimeJourneyPlan` operation returns real
-multi-leg journeys with both scheduled and live departure/arrival times per
-leg — exactly the "how do I actually get from station A to station B, with
-changes, right now" answer this app needs.
+**What the app actually uses: Google's Directions API (transit mode)**
+(`server/lib/googleDirectionsClient.js`). Rather than routing via a station
+pair, it asks Google for the real transit route from your exact location to
+the parkrun's exact location, arriving by a given time. This sidesteps the
+station-CRS-code problem entirely (Directions takes raw coordinates), and —
+critically — its response tells us the actual vehicle type for each transit
+leg (`HEAVY_RAIL`, `BUS`, `SUBWAY`, ...), so the app can now tell you when a
+route needs a bus instead of silently assuming it's all train.
 
-`server/lib/ojpClient.js` implements that operation directly from the
-guide's documented request/response examples: builds the SOAP envelope,
-authenticates with HTTP Basic Auth, and parses the response (including SOAP
-faults) with `fast-xml-parser`. `server/lib/journeyProvider.js` sits above
-it: for a given origin/destination station pair it tries a live lookup and
-falls back to the heuristic on any failure, missing config, or missing CRS
-code, always returning the same shape either way (tagged
-`source: "live"` or `source: "estimated"`).
+`server/lib/journeyProvider.js` sits above it: tries a live lookup and falls
+back to the heuristic on an indeterminate failure (network error, quota),
+but treats a **definitive "no route" or "nothing arrives in time" as
+authoritative** — it does not paper that over with the heuristic's guess,
+which was the whole bug that prompted this change (see git history).
 
-**To turn it on**, set these in `.env` (see `.env.example`):
+**To turn it on**, set in `.env` (see `.env.example`):
 
 ```
-OJP_ENDPOINT_URL=   # the SOAP endpoint URL - see below
-OJP_USERNAME=
-OJP_PASSWORD=
+GOOGLE_MAPS_API_KEY=
 ```
 
-Two things are **not yet verified against a live account** (this session had
-no outbound access to `nationalrail.co.uk` or `raildata.org.uk` to check):
-
-1. **`OJP_ENDPOINT_URL`** — the guide gives the WSDL location
-   (`http://ojp.nationalrail.co.uk/webservices/jpdlr.wsdl`, itself only
-   fetchable once your account is set up) but not the bare SOAP endpoint
-   URL used here. Find it either in the WSDL's `<soap:address location="...">`
-   element, or on your raildata.org.uk subscription/product page, and put it
-   in `.env`.
-2. **Auth details** — the guide documents HTTP Basic Auth (username/password)
-   as an alternative to IP allow-listing; the latter isn't practical here
-   since this app could run from any host. Confirm your raildata.org.uk
-   account issues username/password credentials for this product, not just
-   an API key in a header — if it's the latter, `ojpClient.js`'s auth header
-   will need a small adjustment.
-
-There's a second gap worth knowing about: National Rail addresses stations
-by **CRS code** (3-letter, e.g. `WAT` for London Waterloo), but it's
-unconfirmed whether the NaPTAN CSV used for `stationSource.js` actually
-carries CRS codes in an obvious column (candidates tried: `CrsRef`,
-`CrsCode`, `StationCRS`, `Crs` — see the `CRS_KEYS` list there). If none
-match, live stations simply won't have a `crs` field, and
-`journeyProvider.js` correctly falls back to the heuristic for any station
-pair missing one — so a wrong/missing guess degrades gracefully rather than
-breaking anything, but you'll want to check the server logs and either fix
-the column name or wire up a proper CRS lookup (e.g. a small static
-CRS-code reference dataset) if live results seem sparse.
+You'll need a Google Cloud project with the Directions API enabled and
+billing set up (required even for free-tier usage) — self-serve, no contract
+needed, unlike OJP. This hasn't been tested against a live key from this
+session; if you hit issues, check the server logs for
+`[journeyProvider] Google Directions lookup failed: ...`.
 
 Once configured, `/api/reachable` runs the heuristic across all events as
-before, then spends live OJP lookups only on the top ~20 heuristic
+before, then spends live Directions lookups only on the top ~20 heuristic
 candidates (6 at a time) to refine their journey times and re-rank — so it
 doesn't hammer the API with one call per parkrun event on every request.
+Each result's `journey.source` is `"live"` or `"estimated"`, and a live
+result with `journey.usesNonRailTransit: true` gets a "Needs a bus" badge
+in the UI instead of pretending it's pure train.
 
-## Data-source assumptions, unverified by live testing
+## Data-source notes
 
-This was built in a sandboxed environment with **no outbound access** to
-`parkrun.com`, `nationalrail.co.uk`, or `naptan.api.dft.gov.uk` — so the
-code is written defensively (multiple candidate field names, clear errors,
-and a bundled fallback dataset) so it fails safely if a name has changed.
+This was built in a sandboxed environment with no outbound access to
+`parkrun.com`, `nationalrail.co.uk`, or `naptan.api.dft.gov.uk`, so the code
+was written defensively (multiple candidate field names, clear errors, a
+bundled fallback dataset) and later verified against real output from a
+live machine:
 
-- `events.json` shape — **cross-checked against
-  [andydavidson/parkrun-mcp](https://github.com/andydavidson/parkrun-mcp)**,
-  an existing open-source project that parses the same feed, and confirmed
-  correct: `{ events: { features: [...] }, countries: {...} }`, each
-  feature's `properties.eventname` (slug), `properties.countrycode`, and
-  `geometry.coordinates` as `[lon, lat]`. That project also filters on
-  `properties.seriesid === 1` to get standard Saturday 5k events (excluding
-  junior parkrun's 2k/Sunday events, which run on a different schedule) —
-  `parkrunSource.js` now applies the same filter. See
-  `server/lib/parkrunSource.js`.
-- NaPTAN CSV: assumed columns `CommonName`, `Latitude`, `Longitude`,
-  `ATCOCode` — **not** cross-checked against another source, still unverified.
-  See `server/lib/stationSource.js`.
-
-**Before relying on this**, run it once with real internet access and check
-the server logs for `[parkrunSource]` / `[stationSource]` fallback warnings —
-if you see none, live data loaded correctly. If you do see them, open the
-corresponding file, fetch the URL manually, and adjust the candidate column
-names.
+- `events.json` shape — confirmed correct, both by cross-checking against
+  [andydavidson/parkrun-mcp](https://github.com/andydavidson/parkrun-mcp) (an
+  existing project parsing the same feed) and by a live test run: `{ events:
+  { features: [...] }, countries: {...} }`, each feature's
+  `properties.eventname` (slug), `properties.countrycode`, and
+  `geometry.coordinates` as `[lon, lat]`. Also filters on
+  `properties.seriesid === 1` to exclude junior parkrun's 2k/Sunday events.
+  See `server/lib/parkrunSource.js`.
+- NaPTAN CSV — column names confirmed correct (`CommonName`, `Latitude`,
+  `Longitude`, `ATCOCode`) via a live fetch. That same live fetch also
+  caught a real bug: NaPTAN's own `StopTypes=RLY` query parameter does
+  **not** filter server-side (it silently returns every stop type,
+  including bus stops) — fixed by filtering client-side on the CSV's
+  `StopType` column instead. Confirmed via that fetch: NaPTAN has **no**
+  CRS-code column at all, which is why the live-timetable path
+  (`googleDirectionsClient.js`) routes by raw coordinates rather than
+  station codes. See `server/lib/stationSource.js`.
 
 If live fetching fails for either data source, the app falls back to a small
 bundled sample dataset (`data/fallback-*.json` — ~15 well-known parkruns and
-~25 major stations) so the site still runs and is demoable offline.
+~25 major stations) so the site still runs and is demoable offline. Check
+server logs for `[parkrunSource]` / `[stationSource]` fallback warnings if
+results look off.
 
 ## Running it
 
@@ -166,8 +153,9 @@ server/
     geo.js                haversine distance / nearest-N
     journeyEstimate.js    heuristic journey-time model
     parkrunTiming.js      per-nation default start times, GMT/BST-aware "next Saturday"
-    ojpClient.js           SOAP client for National Rail's OJP RealtimeJourneyPlan
-    journeyProvider.js     tries ojpClient, falls back to the heuristic
+    googleDirectionsClient.js  Google Directions (transit) client - the active live-data path
+    ojpClient.js               SOAP client for National Rail's OJP - built but unused (needs a paid contract, see above)
+    journeyProvider.js         tries googleDirectionsClient, falls back to the heuristic
 public/
   index.html / styles.css / app.js   static frontend (geolocation, postcode, Leaflet map, results)
 data/
@@ -182,13 +170,14 @@ data/
 - `GET /api/reachable?lat=&lon=&stationId=&arrivalBufferMin=&maxTotalMinutes=`
   — reachable parkruns from a given start point/station, sorted by
   door-to-door time (each result's `journey.source` is `"live"` or
-  `"estimated"`; the response's `liveTimetableConfigured` says whether OJP
-  is switched on at all)
+  `"estimated"`, and `journey.usesNonRailTransit` flags a live result that
+  needs a bus; the response's `liveTimetableConfigured` says whether
+  Google Directions is switched on at all)
 
 ## Possible next steps
 
-- Verify `OJP_ENDPOINT_URL` and the CRS-code column against a live NaPTAN
-  fetch and a live raildata.org.uk account (see above).
+- Test `GOOGLE_MAPS_API_KEY` against a live Google Cloud project (not done
+  from this session).
 - Support Sunday junior parkrun (2k, different start times).
 - Cache/precompute station→parkrun nearest-station pairs instead of
   recomputing per request.
