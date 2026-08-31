@@ -248,6 +248,56 @@ npm run dev
 No environment variables are required for the default (heuristic-only)
 version — `.env` is entirely optional.
 
+## Deploying
+
+### Publishing this repo for others to run
+
+Already in place for that: `package.json` has `start`/`dev` scripts and a
+declared MIT `LICENSE`; `.env.example` documents every optional variable
+while the real `.env` stays gitignored; `data/fallback-*.json` means a
+fresh clone runs with zero setup (live transit directions are opt-in via
+`GOOGLE_MAPS_API_KEY`, everything else needs no keys at all).
+
+Two things worth doing before pointing people at it:
+1. Merge this branch into `main`/`master` via a PR — everything currently
+   lives on a feature branch (`claude/parkrun-public-transport-9fqo9s`),
+   easy for a visitor to miss.
+2. Make sure the repo's visibility is **Public** (Settings → General) if
+   it isn't already, so others can find and clone it. Renaming the repo
+   away from `Claude_PR` to something that says what it is (e.g.
+   `parkrun-by-train`) is optional — GitHub redirects the old URL
+   automatically, so it's safe to do at any point.
+
+From there, `npm install && npm start` (this README's "Running it" above)
+is the whole setup story for anyone who clones it.
+
+### Hosting your own copy on a domain
+
+This is a small always-on Express server with in-memory caching and no
+database — it wants a host that keeps one process running continuously,
+not a serverless/functions platform (which would cold-start and lose the
+cache on every invocation). Two reasonable paths:
+
+- **Managed platform** (Render, Railway, Fly.io, etc.) — point it at this
+  GitHub repo; it runs `npm install` then `npm start` automatically
+  (`.node-version` / `package.json`'s `engines` field pin the Node
+  version). Add `GOOGLE_MAPS_API_KEY` as an environment variable in the
+  host's dashboard — never commit `.env`. Add your domain in the same
+  dashboard; it gives you a DNS record (usually a CNAME) to add at your
+  domain registrar, and issues a free TLS certificate automatically. All
+  three have a free or low single-digit £/month tier, which is plenty for
+  personal traffic — separate from, and much smaller than, Google's
+  metered Directions API billing.
+- **A VPS you run yourself** (DigitalOcean, Hetzner, Linode, etc.) —
+  cheaper at scale and full control, but more setup: install Node, keep
+  the process alive with `pm2` or a `systemd` unit, put `nginx` in front
+  as a reverse proxy, and get a certificate with `certbot`. Worth it
+  mainly if you already run one of these for something else.
+
+Either way, the app itself needs no code changes to deploy — it already
+reads `PORT` from the environment and falls back to bundled sample data if
+any external fetch fails.
+
 ## Project layout
 
 ```
