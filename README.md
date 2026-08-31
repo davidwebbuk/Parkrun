@@ -76,15 +76,26 @@ highlighted in the UI.
 challenges" from the same completed-events data used for NENDY filtering:
 the full **A-Z Alphabet Challenge**, spelling out **"PARKRUN"**, and
 spelling the parkrunner's **own name** (only when one could be confidently
-extracted - see below). Convention (these are informal community
-challenges with no single canonical rulebook, so this is a documented
-assumption, not a verified rule): a leading "The " is ignored (so "The
-Hague parkrun" counts as **H**, not T), and only the *set* of letters in
-the target word matters, not repeat counts (one "R" event satisfies every
-R in "PARKRUN"). For each letter the parkrunner hasn't covered yet, the
-response reports the single best (closest) reachable, not-yet-done event
-that would fill it - computed from the heuristic-reachable set, so it
-costs no extra live API calls.
+extracted - see below, this one is called **Namely**). A leading "The " is
+always ignored (so "The Hague parkrun" counts as **H**, not T). For each
+letter still needed, the response reports the single best (closest)
+reachable, not-yet-done event that would fill it - computed from the
+heuristic-reachable set, so it costs no extra live API calls. A fully
+completed challenge still appears in the response (frontend shows
+"Complete! 🎉" rather than the challenge disappearing).
+
+Alphabet and PARKRUN use a *set* convention (informal community
+challenges, no single canonical rulebook - a documented assumption, not a
+verified rule): only which letters appear matters, not repeat counts (one
+"R" event satisfies every R in "PARKRUN"). The name challenge instead
+matches the real **Namely** companion app's own algorithm, verified
+against a real screenshot: every letter of the full name counts *with
+repeats* (three Ns in the name need three separate events), and each
+occurrence must be a *distinct* completed event, assigned earliest-visited
+first - one venue can't cover two occurrences of the same letter no matter
+how many times it's been revisited. This needs each completed event's
+first-visit date, not just its name, which `parkrunAthleteSource.js` now
+also scrapes from the results table's date column.
 
 The name challenge needs the parkrunner's display name. The results page's
 `<title>` tag is generic ("results | parkrun UK") and carries no name -

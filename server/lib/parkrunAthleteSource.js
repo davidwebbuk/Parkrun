@@ -35,6 +35,14 @@ function slugFromHref(href) {
   return match ? match[1].toLowerCase() : undefined;
 }
 
+/** "29/08/2026" (UK format, as shown in the results table) -> "2026-08-29" (sortable), or undefined if unparseable. */
+function parseUkDate(text) {
+  const match = String(text || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return undefined;
+  const [, d, m, y] = match;
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
 // Extraction of the parkrunner's display name, for the "spell your name"
 // letter challenge. The <title> tag is generic ("results | parkrun UK") and
 // carries no name - confirmed against a real profile page. The actual name
@@ -72,9 +80,15 @@ function extractAthleteName($, athleteId) {
   const words = nameText.split(" ").filter(Boolean);
   if (words.length < 2 || nameText.length > 60 || !words.every((w) => wordShaped.test(w))) return undefined;
 
-  // Normalize an ALL-CAPS surname (e.g. "WEBB") to Title Case; leave
-  // already-mixed-case words (e.g. "David", "McDonald") alone.
-  return words.map((w) => (w === w.toUpperCase() && w.length > 1 ? w[0] + w.slice(1).toLowerCase() : w)).join(" ");
+  // Normalize an ALL-CAPS surname (e.g. "WEBB", "DANDEH-NJIE") to Title
+  // Case per hyphen-separated part; leave already-mixed-case words (e.g.
+  // "David", "McDonald") alone.
+  const titleCase = (w) => (w.length > 1 ? w[0] + w.slice(1).toLowerCase() : w);
+  return words
+    .map((w) =>
+      w === w.toUpperCase() ? w.split("-").map(titleCase).join("-") : w
+    )
+    .join(" ");
 }
 
 function parseResultsTable(html, athleteId) {
@@ -100,6 +114,7 @@ function parseResultsTable(html, athleteId) {
   const slugs = new Set();
   const names = new Set();
   const uniqueEvents = new Set(); // slug or name, whichever identified the row - for a de-duplicated count
+  const completedEventsByKey = new Map(); // slug||name -> { slug, name, date: earliest completion, sortable }
 
   table
     .find("tr")
@@ -110,24 +125,45 @@ function parseResultsTable(html, athleteId) {
       const eventCell = eventColIdx >= 0 ? cells.eq(eventColIdx) : cells.eq(0);
       const href = eventCell.find("a").attr("href");
       const slug = slugFromHref(href);
-      const name = eventCell.text().trim().toLowerCase();
+      const rawName = eventCell.text().trim();
+      const name = rawName.toLowerCase();
       if (slug) slugs.add(slug);
       if (name) names.add(name);
-      if (slug || name) uniqueEvents.add(slug || name);
+      const key = slug || name;
+      if (!key) return;
+      uniqueEvents.add(key);
+
+      // Track the earliest date this venue was completed - the Namely-style
+      // name challenge (see letterChallenges.js) needs a "first done" date
+      // per distinct venue to assign repeated letters to separate visits.
+      const date = parseUkDate($(row).find(".format-date").first().text());
+      const existing = completedEventsByKey.get(key);
+      if (!existing || (date && (!existing.date || date < existing.date))) {
+        completedEventsByKey.set(key, { slug, name: rawName, date: date || existing?.date });
+      }
     });
 
-  return { slugs, names, completedCount: uniqueEvents.size, athleteName: extractAthleteName($, athleteId) };
+  return {
+    slugs,
+    names,
+    completedCount: uniqueEvents.size,
+    athleteName: extractAthleteName($, athleteId),
+    completedEvents: [...completedEventsByKey.values()],
+  };
 }
 
 /**
- * Returns { slugs, names, completedCount, athleteName } for this
- * parkrunner: slugs/names of events completed (slugs preferred for
- * matching; names as a fallback for events whose row didn't have a
- * parseable link), and a best-effort display name (undefined if it
- * couldn't be confidently extracted - see extractAthleteName). Returns
- * null if the results couldn't be loaded at all (private profile, invalid
- * ID, fetch failure) - callers should treat null as "don't filter" rather
- * than an error.
+ * Returns { slugs, names, completedCount, athleteName, completedEvents }
+ * for this parkrunner: slugs/names of events completed (slugs preferred
+ * for matching; names as a fallback for events whose row didn't have a
+ * parseable link), a best-effort display name (undefined if it couldn't be
+ * confidently extracted - see extractAthleteName), and completedEvents (one
+ * entry per distinct venue - { slug, name, date } - date is the earliest
+ * completion, "YYYY-MM-DD" or undefined if unparseable; used by the
+ * Namely-style name challenge in letterChallenges.js). Returns null if the
+ * results couldn't be loaded at all (private profile, invalid ID, fetch
+ * failure) - callers should treat null as "don't filter" rather than an
+ * error.
  */
 async function fetchCompletedEvents(athleteIdRaw) {
   const athleteId = normalizeAthleteId(athleteIdRaw);

@@ -192,7 +192,12 @@ app.get("/api/reachable", async (req, res) => {
   // done (see the events filter above), so it's exactly the right pool to
   // search for "closest reachable event that fills a missing letter".
   const challenges = athleteFilterApplied
-    ? buildChallenges({ completedNames: completed.names, athleteName: completed.athleteName, reachableEvents: shortlisted })
+    ? buildChallenges({
+        completedNames: completed.names,
+        athleteName: completed.athleteName,
+        completedEvents: completed.completedEvents,
+        reachableEvents: shortlisted,
+      })
     : [];
 
   if (googleDirections.isConfigured() && liveLimit > 0) {
