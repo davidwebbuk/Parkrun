@@ -238,14 +238,17 @@
     }
     el.challengesPanel.hidden = false;
     el.challengesList.innerHTML = challenges.map((c) => {
-      const opportunityHtml = c.opportunities.length
+      const complete = c.missingLetters.length === 0;
+      const opportunityHtml = complete
+        ? `<p class="hint challenge-complete">Complete! 🎉</p>`
+        : c.opportunities.length
         ? `<ul class="challenge-opportunities">${c.opportunities.map((o) => `
             <li><strong>${escapeHtml(o.letter)}</strong> — ${escapeHtml(o.eventName)} (~${o.totalMinutes} min)</li>
           `).join("")}</ul>`
         : `<p class="hint">No reachable event fills any of your ${c.missingLetters.length} missing letter(s) right now.</p>`;
       return `
         <div class="challenge">
-          <h3>${escapeHtml(c.label)} <span class="badge">${c.completedLetters}/${c.totalLetters}</span></h3>
+          <h3>${escapeHtml(c.label)} <span class="badge${complete ? " badge-live" : ""}">${c.completedLetters}/${c.totalLetters}</span></h3>
           ${opportunityHtml}
         </div>`;
     }).join("");
