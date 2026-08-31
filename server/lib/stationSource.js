@@ -4,10 +4,14 @@ const { parseCsv } = require("./csv");
 
 // NaPTAN (National Public Transport Access Nodes) is DfT's open-data register
 // of every public transport access point in GB, including rail stations.
-// StopTypes=RLY filters the ~2,500 heavy-rail station entries out of the
-// much larger full dataset. Published under the Open Government Licence.
+// The API's own StopTypes=RLY query param is confirmed (via a live test) to
+// NOT actually filter server-side - it silently returns every stop type
+// (bus stops, taxi ranks, etc.) regardless. We still send it in case that
+// gets fixed upstream, but filter to StopType === "RLY" ourselves below,
+// which is the real fix. Published under the Open Government Licence.
 const STATIONS_URL =
   "https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv&StopTypes=RLY";
+const RAIL_STOP_TYPE = "RLY";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // stations don't open/close often
 const FALLBACK_PATH = path.join(__dirname, "..", "..", "data", "fallback-stations.json");
 
@@ -35,6 +39,8 @@ function firstColumn(row, keys) {
 function normalizeCsvRows(rows) {
   const stations = [];
   for (const row of rows) {
+    if (row.StopType !== undefined && row.StopType !== RAIL_STOP_TYPE) continue;
+
     const name = firstColumn(row, NAME_KEYS);
     const latRaw = firstColumn(row, LAT_KEYS);
     const lonRaw = firstColumn(row, LON_KEYS);
