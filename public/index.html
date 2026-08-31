@@ -37,6 +37,11 @@
 
     <section class="panel" id="options-panel" hidden>
       <h2>3. Options</h2>
+      <p class="hint">
+        Add your parkrun ID to hide events you've already done, and highlight your
+        <abbr title="Nearest Event Not Done Yet">NENDY</abbr> - the easiest-to-reach
+        one you haven't run yet. Uses your public results history from parkrun.org.uk.
+      </p>
       <div class="row">
         <label>Arrive at least
           <input id="buffer-input" type="number" min="0" max="60" value="15" />
@@ -45,6 +50,9 @@
         <label>Max door-to-door time
           <input id="max-time-input" type="number" min="15" max="360" step="15" value="60" />
           minutes
+        </label>
+        <label>parkrun ID (optional)
+          <input id="athlete-id-input" type="text" placeholder="e.g. A1234567" autocomplete="off" />
         </label>
         <button id="find-btn" type="button">Find reachable parkruns</button>
       </div>

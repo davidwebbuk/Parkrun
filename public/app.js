@@ -20,6 +20,7 @@
     findBtn: document.getElementById("find-btn"),
     bufferInput: document.getElementById("buffer-input"),
     maxTimeInput: document.getElementById("max-time-input"),
+    athleteIdInput: document.getElementById("athlete-id-input"),
   };
 
   function setStatus(node, text, isError = false) {
@@ -92,6 +93,7 @@
     const stationId = el.stationSelect.value;
     const arrivalBufferMin = Number(el.bufferInput.value) || 15;
     const maxTotalMinutes = Number(el.maxTimeInput.value) || 60;
+    const athleteId = el.athleteIdInput.value.trim();
 
     el.findBtn.disabled = true;
     setStatus(el.globalStatus, "Crunching train times…");
@@ -99,6 +101,7 @@
 
     try {
       const params = new URLSearchParams({ lat, lon, stationId, arrivalBufferMin, maxTotalMinutes });
+      if (athleteId) params.set("athleteId", athleteId);
       const res = await fetch(`/api/reachable?${params.toString()}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Request failed");
@@ -111,10 +114,13 @@
   }
 
   function renderResults(body) {
-    const { results, originStation, disclaimer, eventsSource, count } = body;
+    const { results, originStation, disclaimer, eventsSource, count, athleteFilter } = body;
 
     if (count === 0) {
-      setStatus(el.globalStatus, "No parkruns found reachable in time with these settings — try relaxing the max journey time.", false);
+      const reason = athleteFilter?.applied
+        ? "No unrun parkruns found reachable in time with these settings — try relaxing the max journey time."
+        : "No parkruns found reachable in time with these settings — try relaxing the max journey time.";
+      setStatus(el.globalStatus, reason, false);
       el.results.innerHTML = "";
       return;
     }
@@ -122,6 +128,11 @@
     let statusText = `${count} parkrun${count === 1 ? "" : "s"} reachable in time from ${originStation.name}. ${disclaimer}`;
     if (eventsSource === "fallback") {
       statusText += " (Using bundled sample parkrun data — live parkrun.com fetch unavailable.)";
+    }
+    if (athleteFilter?.applied) {
+      statusText += ` Hiding ${athleteFilter.completedCount} event(s) you've already done.`;
+    } else if (athleteFilter?.note) {
+      statusText += ` ${athleteFilter.note}`;
     }
     setStatus(el.globalStatus, statusText);
     el.results.innerHTML = results.map(resultCardHtml).join("");
@@ -149,8 +160,8 @@
     const isLive = r.journey.source === "live";
     const needsNonRailTransit = isLive && r.journey.usesNonRailTransit;
     return `
-      <article class="result-card">
-        <h3>${escapeHtml(r.name)}</h3>
+      <article class="result-card${r.nendy ? " result-card-nendy" : ""}">
+        <h3>${r.nendy ? "🏆 " : ""}${escapeHtml(r.name)}${r.nendy ? ` <span class="badge badge-nendy">NENDY</span>` : ""}</h3>
         <div class="result-meta">
           <span class="badge${isLive ? " badge-live" : ""}">${isLive ? "Live" : "Estimated"}</span>
           ${needsNonRailTransit ? `<span class="badge badge-warn">Needs: ${escapeHtml(r.journey.nonRailSummary || "other transport")}</span>` : ""}

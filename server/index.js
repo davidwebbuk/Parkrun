@@ -8,6 +8,7 @@ const { estimateJourney } = require("./lib/journeyEstimate");
 const { defaultStartTime, nextSaturdayAt } = require("./lib/parkrunTiming");
 const googleDirections = require("./lib/googleDirectionsClient");
 const { planJourney } = require("./lib/journeyProvider");
+const { fetchCompletedEvents } = require("./lib/parkrunAthleteSource");
 
 const PORT = process.env.PORT || 3000;
 const EARLIEST_PLAUSIBLE_DEPARTURE_HOUR = 5.5; // 05:30 - before this, assume no usable train exists
@@ -56,6 +57,13 @@ function recomputeReachability({ journey, startDate, arrivalBufferMin, maxTotalM
   return { requiredArrivalDate, departureDate, reachable };
 }
 
+/** True if `event` appears in a parkrunner's completed-events data (see parkrunAthleteSource.js). */
+function isEventDone(event, completed) {
+  if (completed.slugs.has(event.id)) return true;
+  const bareName = event.name.replace(/\s*parkrun$/i, "").trim().toLowerCase();
+  return completed.names.has(bareName);
+}
+
 const app = express();
 app.use(express.static(path.join(__dirname, "..", "public")));
 
@@ -96,8 +104,16 @@ app.get("/api/reachable", async (req, res) => {
   const arrivalBufferMin = Number(req.query.arrivalBufferMin) || DEFAULT_ARRIVAL_BUFFER_MIN;
   const maxTotalMinutes = Number(req.query.maxTotalMinutes) || DEFAULT_MAX_TOTAL_MINUTES;
 
-  const [{ data: stations, source: stationsSource }, { data: events, source: eventsSource }] =
-    await Promise.all([fetchStations(), fetchParkruns()]);
+  const [{ data: stations, source: stationsSource }, { data: allEvents, source: eventsSource }, completed] =
+    await Promise.all([
+      fetchStations(),
+      fetchParkruns(),
+      req.query.athleteId ? fetchCompletedEvents(req.query.athleteId) : Promise.resolve(null),
+    ]);
+
+  const athleteFilterRequested = Boolean(req.query.athleteId);
+  const athleteFilterApplied = athleteFilterRequested && completed !== null;
+  const events = athleteFilterApplied ? allEvents.filter((e) => !isEventDone(e, completed)) : allEvents;
 
   if (stations.length === 0 || events.length === 0) {
     return res.status(503).json({ error: "No station or parkrun data available" });
@@ -170,7 +186,7 @@ app.get("/api/reachable", async (req, res) => {
     shortlisted = shortlisted.filter((r) => r.reachable).sort((a, b) => a.journey.totalMinutes - b.journey.totalMinutes);
   }
 
-  const reachableResults = shortlisted.map((r) => {
+  const reachableResults = shortlisted.map((r, index) => {
     // Live results route point-to-point and may use a different station
     // than our heuristic guess - show the one Directions actually picked.
     const liveStationName = r.journey.viaStationName;
@@ -194,6 +210,9 @@ app.get("/api/reachable", async (req, res) => {
       requiredDepartureTime: r.requiredDepartureTime.toISOString(),
       reachable: r.reachable,
       mapsUrl: r.mapsUrl,
+      // The Nearest Event Not Done Yet - the top result, once already
+      // filtered to events this parkrunner hasn't done and sorted by ease.
+      nendy: athleteFilterApplied && index === 0,
     };
   });
 
@@ -201,6 +220,14 @@ app.get("/api/reachable", async (req, res) => {
     stationsSource,
     eventsSource,
     liveTimetableConfigured: googleDirections.isConfigured(),
+    athleteFilter: {
+      requested: athleteFilterRequested,
+      applied: athleteFilterApplied,
+      completedCount: athleteFilterApplied ? completed.completedCount : undefined,
+      note: athleteFilterRequested && !athleteFilterApplied
+        ? "Couldn't load results for that parkrun ID (private profile, invalid ID, or parkrun.org.uk unreachable) - showing all events."
+        : undefined,
+    },
     originStation: {
       id: originStation.id,
       name: originStation.name,

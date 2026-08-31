@@ -31,6 +31,38 @@ real directions on Google Maps.
    result linking out to a pre-filled Google Maps *transit directions* URL
    (`google.com/maps/dir/?api=1&...&travelmode=transit`) so you can check the
    actual live timetable in one click.
+6. **Optional: your parkrun history** — enter your parkrun ID and the app
+   hides events you've already done, and highlights the top result as your
+   **NENDY** (Nearest Event Not Done Yet — a term from parkrun tourism
+   culture, not something this app invented). See "Filtering by parkrun
+   history" below.
+
+## Filtering by parkrun history (NENDY)
+
+`server/lib/parkrunAthleteSource.js` fetches a parkrunner's public results
+history from `https://www.parkrun.org.uk/parkrunner/<id>/all/` and parses out
+which events they've completed. The URL pattern and HTML parsing approach
+(find the `<caption>` containing "All"/"Results", read its parent `<table>`,
+zip header cells to data cells, pull the event slug from the "Event" column's
+link `href`) is cross-checked against
+[andydavidson/parkrun-mcp](https://github.com/andydavidson/parkrun-mcp), an
+existing open-source project scraping the same public page — same pattern
+used earlier for `events.json`. Verified with a synthetic HTML fixture
+matching that shape (multiple visits to the same event correctly dedupe to
+one "done" event; rows with no parseable link still get name-matched as a
+fallback), but **not yet tested against a real parkrun.org.uk page** from
+this session (no outbound access here — see "Data-source notes").
+
+Results history is public by default, but a parkrunner can opt out in their
+privacy settings — if that page doesn't show a recognizable results table
+(private profile, wrong ID, or the fetch fails outright), the app doesn't
+error: it just runs unfiltered and says why in `athleteFilter.note`.
+
+Pass `athleteId` as a query param to `/api/reachable` (or fill in the
+"parkrun ID" field in the UI) — accepts `"A1234567"`, `"a1234567"`, or bare
+`"1234567"`. When applied, the top result (already sorted by ease of
+journey, now filtered to events not yet done) is flagged `nendy: true` and
+highlighted in the UI.
 
 ## Journey times: heuristic by default, real transit directions if you configure them
 
@@ -156,6 +188,7 @@ server/
     googleDirectionsClient.js  Google Directions (transit) client - the active live-data path
     ojpClient.js               SOAP client for National Rail's OJP - built but unused (needs a paid contract, see above)
     journeyProvider.js         tries googleDirectionsClient, falls back to the heuristic
+    parkrunAthleteSource.js    fetch + parse a parkrunner's results history for NENDY filtering
 public/
   index.html / styles.css / app.js   static frontend (geolocation, postcode, Leaflet map, results)
 data/
@@ -167,17 +200,20 @@ data/
 - `GET /api/stations` — all known rail stations
 - `GET /api/parkruns` — all known GB parkrun events
 - `GET /api/nearest-stations?lat=&lon=&limit=` — nearest stations to a point
-- `GET /api/reachable?lat=&lon=&stationId=&arrivalBufferMin=&maxTotalMinutes=`
+- `GET /api/reachable?lat=&lon=&stationId=&arrivalBufferMin=&maxTotalMinutes=&athleteId=`
   — reachable parkruns from a given start point/station, sorted by
   door-to-door time (each result's `journey.source` is `"live"` or
   `"estimated"`, and `journey.usesNonRailTransit` flags a live result that
   needs a bus; the response's `liveTimetableConfigured` says whether
-  Google Directions is switched on at all)
+  Google Directions is switched on at all). `athleteId` is optional — when
+  given, events that parkrunner has already done are filtered out, the
+  response includes an `athleteFilter` object (`requested`/`applied`/
+  `completedCount`/`note`), and the top result gets `nendy: true`.
 
 ## Possible next steps
 
-- Test `GOOGLE_MAPS_API_KEY` against a live Google Cloud project (not done
-  from this session).
+- Test `athleteId` filtering against a real parkrun.org.uk results page
+  (not done from this session — see "Filtering by parkrun history" above).
 - Support Sunday junior parkrun (2k, different start times).
 - Cache/precompute station→parkrun nearest-station pairs instead of
   recomputing per request.
