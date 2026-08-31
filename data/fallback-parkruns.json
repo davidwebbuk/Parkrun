@@ -1,0 +1,20 @@
+{
+  "note": "Approximate, illustrative-only fallback data for a small sample of well-known GB parkruns. Used ONLY when the live fetch of https://images.parkrun.com/events.json fails (e.g. no network access). Coordinates are approximate (accurate to roughly a few hundred metres) and event lists change over time - do not rely on this for real planning.",
+  "events": [
+    { "id": "bushy", "name": "Bushy Park parkrun", "lat": 51.4115, "lon": -0.3345, "url": "https://www.parkrun.org.uk/bushy/" },
+    { "id": "southampton", "name": "Southampton parkrun", "lat": 50.9257, "lon": -1.4106, "url": "https://www.parkrun.org.uk/southampton/" },
+    { "id": "brueton", "name": "Brueton parkrun", "lat": 52.4116, "lon": -1.7644, "url": "https://www.parkrun.org.uk/brueton/" },
+    { "id": "cannonhill", "name": "Cannon Hill parkrun", "lat": 52.4392, "lon": -1.9013, "url": "https://www.parkrun.org.uk/cannonhill/" },
+    { "id": "victoriapark", "name": "Victoria Park parkrun", "lat": 51.5361, "lon": -0.0362, "url": "https://www.parkrun.org.uk/victoriapark/" },
+    { "id": "peckhamrye", "name": "Peckham Rye parkrun", "lat": 51.4667, "lon": -0.0673, "url": "https://www.parkrun.org.uk/peckhamrye/" },
+    { "id": "hydepark", "name": "Hyde Park parkrun", "lat": 51.5073, "lon": -0.1657, "url": "https://www.parkrun.org.uk/hydepark/" },
+    { "id": "roundhay", "name": "Roundhay parkrun", "lat": 53.8253, "lon": -1.5013, "url": "https://www.parkrun.org.uk/roundhay/" },
+    { "id": "sefton", "name": "Sefton Park parkrun", "lat": 53.3811, "lon": -2.9312, "url": "https://www.parkrun.org.uk/seftonpark/" },
+    { "id": "heaton", "name": "Heaton parkrun", "lat": 54.9884, "lon": -1.5764, "url": "https://www.parkrun.org.uk/heaton/" },
+    { "id": "cardiffbute", "name": "Cardiff parkrun (Bute Park)", "lat": 51.4867, "lon": -3.1868, "url": "https://www.parkrun.org.uk/cardiff/" },
+    { "id": "bristolashton", "name": "Ashton Court parkrun", "lat": 51.4489, "lon": -2.6390, "url": "https://www.parkrun.org.uk/ashtoncourt/" },
+    { "id": "edinburghcramond", "name": "Cramond parkrun", "lat": 55.9767, "lon": -3.3010, "url": "https://www.parkrun.org.uk/cramond/" },
+    { "id": "glasgowpollok", "name": "Pollok parkrun", "lat": 55.8321, "lon": -4.3168, "url": "https://www.parkrun.org.uk/pollok/" },
+    { "id": "oxfordcutteslowe", "name": "Cutteslowe parkrun", "lat": 51.7847, "lon": -1.2698, "url": "https://www.parkrun.org.uk/cutteslowe/" }
+  ]
+}

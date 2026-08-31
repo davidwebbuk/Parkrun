@@ -1,0 +1,15 @@
+{
+  "name": "parkrun-by-train",
+  "version": "0.1.0",
+  "description": "Find which UK parkruns you can reach in time for the 9am start using nothing but public transport.",
+  "private": true,
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

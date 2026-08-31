@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>parkrun by train</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>parkrun by train 🚆🏃</h1>
+    <p class="subtitle">
+      Which UK parkruns can you reach by 9am using nothing but public transport?
+    </p>
+  </header>
+
+  <main>
+    <section class="panel" id="location-panel">
+      <h2>1. Where are you starting from?</h2>
+      <div class="row">
+        <button id="use-location-btn" type="button">📍 Use my current location</button>
+        <span class="or">or</span>
+        <form id="postcode-form">
+          <input id="postcode-input" type="text" placeholder="e.g. SW1A 1AA" autocomplete="postal-code" />
+          <button type="submit">Look up postcode</button>
+        </form>
+      </div>
+      <p id="location-status" class="status"></p>
+    </section>
+
+    <section class="panel" id="station-panel" hidden>
+      <h2>2. Departure station</h2>
+      <p>We picked the nearest station. Change it if you'd rather start from somewhere else.</p>
+      <select id="station-select"></select>
+    </section>
+
+    <section class="panel" id="options-panel" hidden>
+      <h2>3. Options</h2>
+      <div class="row">
+        <label>Arrive at least
+          <input id="buffer-input" type="number" min="0" max="60" value="10" />
+          minutes before the start
+        </label>
+        <label>Max door-to-door time
+          <input id="max-time-input" type="number" min="30" max="360" step="15" value="240" />
+          minutes
+        </label>
+        <button id="find-btn" type="button">Find reachable parkruns</button>
+      </div>
+    </section>
+
+    <p id="global-status" class="status"></p>
+
+    <section class="panel" id="map-panel" hidden>
+      <div id="map"></div>
+    </section>
+
+    <section id="results"></section>
+  </main>
+
+  <footer>
+    <p>
+      Journey times are <strong>estimates</strong> based on straight-line distance between stations,
+      not a live rail timetable &mdash; there is no National Rail live-times API wired up yet.
+      Always double check with the "check real directions" link before you travel.
+      Data: <a href="https://images.parkrun.com/events.json" target="_blank" rel="noopener">parkrun</a>,
+      <a href="https://naptan.api.dft.gov.uk/" target="_blank" rel="noopener">NaPTAN</a> (OGL),
+      <a href="https://postcodes.io/" target="_blank" rel="noopener">postcodes.io</a>.
+    </p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
