@@ -298,6 +298,49 @@ Either way, the app itself needs no code changes to deploy — it already
 reads `PORT` from the environment and falls back to bundled sample data if
 any external fetch fails.
 
+### Deploying via cPanel's "Setup Node.js App" (e.g. a subdomain like `parkrun.example.com`)
+
+Many shared-hosting cPanel accounts include CloudLinux's Node.js Selector,
+which runs a real long-lived Node process (not serverless) — a good fit
+for this app, no code changes needed since it already reads `PORT` from
+the environment the way cPanel injects it.
+
+1. **Create the subdomain** — cPanel → *Domains* → *Create A New Domain*,
+   enter e.g. `parkrun` under your domain. If your domain's DNS is managed
+   by this same hosting account (the normal case), the DNS record is
+   created automatically; if it's managed elsewhere, add the A/CNAME
+   record the subdomain screen shows you at your DNS provider instead.
+2. **Get the code onto the server** — easiest is cPanel → *Git™ Version
+   Control* → *Create* → paste this repo's clone URL (works once it's a
+   public GitHub repo) and a destination directory. No Git Version
+   Control option? Download a zip of the repo from GitHub and extract it
+   via *File Manager* instead.
+3. **cPanel → Software → Setup Node.js App → Create Application:**
+   - *Node.js version*: the highest available ≥ 20.12 (this repo pins
+     `22` via `.node-version`, so match that if offered).
+   - *Application mode*: Production
+   - *Application root*: the directory from step 2
+   - *Application URL*: the subdomain from step 1
+   - *Application startup file*: `server/index.js`
+   - Create it, then use the *Run NPM Install* button (or the `source
+     ... && npm install` command the panel shows) to install dependencies
+     inside cPanel's managed Node environment.
+4. **Add environment variables** in that same Node.js App screen: at
+   minimum `GOOGLE_MAPS_API_KEY` (for live transit directions — see
+   "Adding real timetables" above). Don't set `PORT` yourself; cPanel
+   assigns and injects it. This is instead of `.env`, which isn't used
+   in this setup at all.
+5. **Start/Restart the app** from the same screen — cPanel supervises the
+   process, no `pm2`/`systemd` needed.
+6. **Enable HTTPS** — cPanel → *SSL/TLS Status*, run AutoSSL for the new
+   subdomain if it isn't already covered (usually automatic for
+   subdomains created in step 1).
+7. Visit `https://parkrun.<yourdomain>` to confirm it's live.
+
+To update later: pull the latest commit (the Git Version Control screen
+has a *Pull or Deploy* button, or re-upload if you went the zip route),
+re-run *NPM Install* if `package.json` changed, then *Restart* the app.
+
 ## Project layout
 
 ```
