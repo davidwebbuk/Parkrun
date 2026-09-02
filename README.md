@@ -341,6 +341,13 @@ To update later: pull the latest commit (the Git Version Control screen
 has a *Pull or Deploy* button, or re-upload if you went the zip route),
 re-run *NPM Install* if `package.json` changed, then *Restart* the app.
 
+**If a search with a parkrun ID returns a bare 503** with nothing useful in
+the app's own error log (cPanel's Node.js App screen usually links to one):
+CloudLinux's per-account resource limiter (LVE) can kill the whole process
+mid-request on constrained shared hosting when it fires off several
+concurrent Google Directions calls at once - see `LIVE_REFINE_CONCURRENCY`
+in `.env.example`, defaulted low specifically for this.
+
 ## Project layout
 
 ```

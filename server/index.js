@@ -24,7 +24,13 @@ const DEFAULT_MAX_TOTAL_MINUTES = 90; // don't bother suggesting long door-to-do
 // slice on demand, only spending more calls when the user actually wants them.
 const DEFAULT_LIVE_LIMIT = 10;
 const MAX_LIVE_LIMIT = 100; // hard cap regardless of what a request asks for
-const LIVE_REFINE_CONCURRENCY = 8;
+// 8 concurrent outbound HTTPS calls to Google is fine on a normal VPS, but on
+// constrained shared hosting (CloudLinux LVE-style CPU/connection limits) it
+// can get the whole process killed mid-request - the client just sees a bare
+// 503 with nothing useful in the app's own logs, since the OS/host kills the
+// process rather than anything throwing a catchable JS error. Default low
+// enough to be safe there; override via env if you know your host can take more.
+const LIVE_REFINE_CONCURRENCY = Number(process.env.LIVE_REFINE_CONCURRENCY) || 3;
 
 /** Runs `worker` over `items` with at most `concurrency` in flight at once. */
 async function mapWithConcurrency(items, concurrency, worker) {
