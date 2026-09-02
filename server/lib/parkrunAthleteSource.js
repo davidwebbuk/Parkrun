@@ -1,4 +1,11 @@
-const cheerio = require("cheerio");
+// cheerio is required lazily inside parseResultsTable() below, not here at
+// module load - it pulls in a fairly large dependency tree (parse5,
+// htmlparser2, css-select, ...), and on constrained shared hosting that
+// disk read happens on every cold process start whether or not a request
+// actually ends up using it. Loading it only when a parkrun.org.uk fetch
+// has actually succeeded means requests that don't filter by athlete (or
+// where the fetch fails, as it currently does from some hosts - see
+// README "Data-source notes") never pay that cost at all.
 
 // Fetches a parkrunner's full results history from their public profile page
 // on parkrun.org.uk, to find which events they've already done. This is the
@@ -92,6 +99,7 @@ function extractAthleteName($, athleteId) {
 }
 
 function parseResultsTable(html, athleteId) {
+  const cheerio = require("cheerio");
   const $ = cheerio.load(html);
 
   const table = $("caption")
