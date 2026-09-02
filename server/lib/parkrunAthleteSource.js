@@ -175,6 +175,7 @@ async function fetchCompletedEvents(athleteIdRaw) {
   try {
     const res = await fetch(profileUrl(athleteId), {
       headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();

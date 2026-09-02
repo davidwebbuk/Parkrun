@@ -113,7 +113,7 @@ async function transitDirections({ origin, destination, arrivalTime, preferTrain
   });
   if (preferTrain) params.set("transit_mode", "train");
 
-  const res = await fetch(`${DIRECTIONS_URL}?${params.toString()}`);
+  const res = await fetch(`${DIRECTIONS_URL}?${params.toString()}`, { signal: AbortSignal.timeout(10000) });
   const body = await res.json();
 
   if (body.status === "ZERO_RESULTS") {

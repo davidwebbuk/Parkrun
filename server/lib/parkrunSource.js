@@ -97,7 +97,7 @@ async function fetchParkruns({ forceRefresh = false } = {}) {
   if (isFresh && !forceRefresh) return cache;
 
   try {
-    const res = await fetch(EVENTS_URL, { headers: { accept: "application/json" } });
+    const res = await fetch(EVENTS_URL, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`events.json fetch failed: HTTP ${res.status}`);
     const raw = await res.json();
     const events = normalizeRawEvents(raw);

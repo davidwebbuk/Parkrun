@@ -75,7 +75,7 @@ async function fetchStations({ forceRefresh = false } = {}) {
   if (isFresh && !forceRefresh) return cache;
 
   try {
-    const res = await fetch(STATIONS_URL, { headers: { accept: "text/csv" } });
+    const res = await fetch(STATIONS_URL, { headers: { accept: "text/csv" }, signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`NaPTAN fetch failed: HTTP ${res.status}`);
     const text = await res.text();
     const rows = parseCsv(text);
